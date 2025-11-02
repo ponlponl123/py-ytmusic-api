@@ -4,64 +4,54 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install mkdocs mkdocs-material neoteroi-mkdocs pymdown-extensions mkdocs-swagger-ui-tag essentials-openapi[full]
 
-      - name: Generate OpenAPI Docs
+      - name: Generate OpenAPI Documentation
         run: |
-          mkdir -p docs
-          python -c "from fastapi.openapi.utils import get_openapi; from src.main import app; import json; open('docs/openapi.json', 'w').write(json.dumps(get_openapi(title='API Docs', version='1.0.0', routes=app.routes), indent=2))"
+          python generate_docs.py
 
-      - name: Create MkDocs Config
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Build with MkDocs
         run: |
-          echo "site_name: py-ytmusic-api docs" >> mkdocs.yml
-          echo "site_url: https://ponlponl123.github.io/py-ytmusic-api" >> mkdocs.yml
-          echo "repo_url: https://github.com/Ponlponl123/py-ytmusic-api" >> mkdocs.yml
-          echo "theme:" >> mkdocs.yml
-          echo "  name: material" >> mkdocs.yml
-          echo "nav:" >> mkdocs.yml
-          echo "  - Home: README.md" >> mkdocs.yml
-          echo "  - API Reference: openapi.json" >> mkdocs.yml
-          echo "markdown_extensions:" >> mkdocs.yml
-          echo "  - pymdownx.details" >> mkdocs.yml
-          echo "  - pymdownx.superfences" >> mkdocs.yml
-          echo "  - pymdownx.tabbed:" >> mkdocs.yml
-          echo "      alternate_style: true" >> mkdocs.yml
-          echo "plugins:" >> mkdocs.yml
-          echo "  - search" >> mkdocs.yml
-          echo "  - neoteroi.mkdocsoad:" >> mkdocs.yml
-          echo "      use_pymdownx: true" >> mkdocs.yml
-          echo "  - swagger-ui-tag" >> mkdocs.yml
-          echo "extra_css:" >> mkdocs.yml
-          echo "  - css/mkdocsoad.css" >> mkdocs.yml
-
-      - name: Build Docs
-        run: mkdocs build
-
-      - name: Deploy to GitHub Pages
-        uses: actions/configure-pages@v5
+          mkdocs build --verbose
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "site"
+          path: ./site
 
-      - name: Deploy GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4

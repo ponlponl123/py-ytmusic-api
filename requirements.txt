@@ -3,3 +3,8 @@ uvicorn===0.34.0
 ytmusicapi===1.11.1
 fastapi[standard]
 uvicorn[standard]
+
+# Documentation dependencies
+mkdocs>=1.5.0
+mkdocs-material>=9.0.0
+mkdocs-swagger-ui-tag>=0.6.0
