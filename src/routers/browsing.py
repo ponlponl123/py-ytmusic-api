@@ -491,54 +491,140 @@ async def get_related_by_browse_id(browseId: str):
 async def get_song_related_by_song_id(songId: str):
     try:
         ytmusic = YTMusic()
-        watch_playlist = ytmusic.get_watch_playlist(songId)
+        
+        # Try direct approach first (works for some song IDs)
+        related_content = None
+        related_browse_id = None
+        
+        try:
+            related_content = ytmusic.get_song_related(songId)
+            related_browse_id = songId
+            logger.info("Direct get_song_related worked for %s", songId)
+        except Exception as direct_error:
+            logger.info("Direct approach failed for %s, trying watch playlist: %s", songId, str(direct_error))
+            
+            # Fallback: Get watch playlist and extract related browse ID
+            try:
+                watch_playlist = ytmusic.get_watch_playlist(songId)
+                
+                if not watch_playlist or 'related' not in watch_playlist:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "No related content available", 
+                            "message": "This song doesn't have related content available",
+                            "songId": songId
+                        }
+                    )
+                
+                related_browse_id = watch_playlist['related']
+                related_content = ytmusic.get_song_related(related_browse_id)
+                logger.info("Watch playlist approach worked for %s, browse ID: %s", songId, related_browse_id)
+                
+            except Exception as watch_error:
+                logger.error("Both approaches failed for %s: direct=%s, watch=%s", songId, str(direct_error), str(watch_error))
+                raise watch_error
 
-        if not watch_playlist:
-            raise HTTPException(status_code=404, detail="Song not found")
-
-        if "related" not in watch_playlist or not watch_playlist["related"]:
+        if not related_content:
             raise HTTPException(
-                status_code=404, detail="No related content available for this song"
+                status_code=404,
+                detail={
+                    "error": "No related content available",
+                    "message": "No related songs found for this song ID",
+                    "songId": songId
+                }
             )
 
-        results = ytmusic.get_song_related(watch_playlist["related"])
+        # Also try to get basic song info for additional context
+        song_info = None
+        try:
+            song_info = ytmusic.get_song(songId)
+        except Exception:
+            # If song info fails, continue with just related content
+            pass
 
         return {
             "message": "OK",
-            "query": songId,
-            "result": {"playlist": watch_playlist, "related": results},
+            "songId": songId,
+            "related_browse_id": related_browse_id,
+            "related_content": related_content,
+            "song_info": song_info,
+            "total_related": len(related_content) if isinstance(related_content, list) else 0
         }
 
     except HTTPException:
         raise  # Re-raise HTTP exceptions as they are
 
     except KeyError as e:
-        logger.error(f"KeyError in get_song_related_by_song_id for {songId}: {str(e)}")
+        logger.error("KeyError in get_song_related_by_song_id for %s: %s", songId, str(e))
 
-        if "related" in str(e):
+        if "header" in str(e).lower():
             raise HTTPException(
-                status_code=404,
+                status_code=503,
                 detail={
-                    "error": "Related content not available",
-                    "message": "Related content structure has changed or is not available for this song",
+                    "error": "API structure error",
+                    "message": "YouTube Music API structure has changed, song related content temporarily unavailable",
                     "songId": songId,
+                    "technical_details": str(e),
                 },
-            )
+            ) from e
 
         raise HTTPException(
-            status_code=503,
+            status_code=404,
             detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, song related content temporarily unavailable",
+                "error": "Related content not available",
+                "message": "Related content structure has changed or is not available for this song",
                 "songId": songId,
-                "technical_details": str(e),
             },
-        )
+        ) from e
 
     except Exception as e:
-        logger.error(f"Unexpected error in get_song_related_by_song_id for {songId}: {str(e)}")
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail=f"Song with ID {songId} not found")
+        logger.error("Unexpected error in get_song_related_by_song_id for %s: %s", songId, str(e))
+        
+        error_msg = str(e).lower()
+        
+        if "400" in error_msg and ("bad request" in error_msg or "invalid argument" in error_msg):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Invalid song ID",
+                    "message": f"Song ID '{songId}' is not valid or cannot be used to fetch related content",
+                    "songId": songId,
+                    "recommendation": "Verify the song ID is correct and the song is publicly available"
+                }
+            ) from e
+        
+        if "not found" in error_msg or "unavailable" in error_msg:
+            raise HTTPException(
+                status_code=404, 
+                detail={
+                    "error": "Song not found",
+                    "message": f"Song with ID {songId} not found or unavailable",
+                    "songId": songId
+                }
+            ) from e
+        
+        if "private" in error_msg or "access" in error_msg or "401" in error_msg:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "Access denied",
+                    "message": "This song may be private or region-restricted",
+                    "songId": songId
+                }
+            ) from e
+
+        # Check for server errors from YouTube Music
+        if "server returned http" in error_msg:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "YouTube Music API error",
+                    "message": "YouTube Music service is experiencing issues",
+                    "songId": songId,
+                    "technical_details": str(e)
+                }
+            ) from e
 
         raise HTTPException(
             status_code=500,
@@ -546,8 +632,9 @@ async def get_song_related_by_song_id(songId: str):
                 "error": "Internal server error",
                 "message": "An unexpected error occurred while fetching song related content",
                 "songId": songId,
+                "technical_details": str(e)
             },
-        )
+        ) from e
 
 
 @router.get("/lyrics/{browseId}")

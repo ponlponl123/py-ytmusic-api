@@ -46,7 +46,7 @@ async def health_check():
         }
 
 
-@router.get("/search")
+@router.get("/")
 async def search(
     query: str = Query(..., description="Search query"),
     filter: str | None = None,

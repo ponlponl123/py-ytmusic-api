@@ -1,12 +1,23 @@
-# py-ytmusic-api
+# YT Music API
 
-thanks [ytmusicapi](https://github.com/sigma67/ytmusicapi) lib for ytmusic client/api and [fastapi](https://github.com/fastapi/fastapi) lib for api builder!
+A comprehensive YouTube Music API wrapper with robust error handling and monitoring capabilities.
 
-## API Documentation
+Thanks to [ytmusicapi](https://github.com/sigma67/ytmusicapi) for the YouTube Music client/API and [FastAPI](https://github.com/fastapi/fastapi) for the API framework!
 
-- first, run the server by following setup steps
+## 📚 Documentation
 
-- visit [localhost:8000/docs](localhost:8000/docs) for API documentation. :)
+- **📖 Full Documentation:** [https://ponlponl123.github.io/py-ytmusic-api](https://ponlponl123.github.io/py-ytmusic-api)
+- **🔧 Interactive API Docs:** [localhost:8000/docs](http://localhost:8000/docs) (when running locally)
+- **📋 ReDoc:** [localhost:8000/redoc](http://localhost:8000/redoc) (when running locally)
+
+## ✨ Features
+
+- 🎵 Complete YouTube Music integration
+- 🛡️ Comprehensive error handling for API changes
+- 📊 Built-in health monitoring
+- 🔄 Automatic fallback mechanisms
+- 📚 Full API documentation
+- 🐳 Docker support
 
 ## Setup
 

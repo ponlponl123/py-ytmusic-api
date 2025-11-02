@@ -37,7 +37,7 @@ def get_mood_categories():
         )
 
 
-@router.get("/watch/{videoId}")
+@router.get("/playlist/{videoId}")
 async def get_watch_playlist(
     videoId: str,
     playlistId: str | None = None,
@@ -94,3 +94,4 @@ async def get_watch_playlist(
                 "videoId": videoId,
             },
         )
+
