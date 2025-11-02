@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  py-api-server:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: python -m uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
