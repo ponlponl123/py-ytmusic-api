@@ -46,6 +46,36 @@ async def health_check():
         }
 
 
+def _enrich_search_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Enrich search results by adding category labels based on resultType
+    when category is null (common when filter is None or "all").
+    """
+    # Category mapping based on resultType
+    category_map = {
+        "song": "Songs",
+        "video": "Videos",
+        "artist": "Artists",
+        "album": "Albums",
+        "playlist": "Playlists",
+        "episode": "Episodes",
+    }
+    
+    enriched_results = []
+    for item in results:
+        # Create a copy to avoid modifying the original
+        enriched_item = item.copy()
+        
+        # If category is null and we have a resultType, infer the category
+        if enriched_item.get("category") is None and "resultType" in enriched_item:
+            result_type = enriched_item["resultType"]
+            enriched_item["category"] = category_map.get(result_type, None)
+        
+        enriched_results.append(enriched_item)
+    
+    return enriched_results
+
+
 @router.get("/")
 async def search(
     query: str = Query(..., description="Search query"),
@@ -53,6 +83,7 @@ async def search(
     ignore_spelling: bool = False,
     limit: int = 20,
     scope: str | None = None,
+    enrich_categories: bool = True,
 ):
     try:
         ytmusic = YTMusic()
@@ -62,6 +93,10 @@ async def search(
 
         if not search_results:
             raise HTTPException(status_code=404, detail="No search result found")
+
+        # Enrich results with categories if requested
+        if enrich_categories:
+            search_results = _enrich_search_results(search_results)
 
         return {"message": "OK", "query": query, "result": search_results}
 
