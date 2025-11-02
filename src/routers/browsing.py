@@ -45,29 +45,118 @@ async def get_home(limit: int = 3):
 async def get_artist(channelId: str):
     try:
         ytmusic = YTMusic()
-        search_results = ytmusic.get_artist(channelId)
+        search_results = None
+        
+        # Try get_artist first
+        try:
+            search_results = ytmusic.get_artist(channelId)
+        except KeyError as artist_error:
+            # Check if this is a header renderer mismatch issue
+            error_str = str(artist_error)
+            if "musicImmersiveHeaderRenderer" in error_str or "musicVisualHeaderRenderer" in error_str:
+                logger.info(
+                    f"get_artist failed for {channelId} due to header renderer issue ({error_str}), trying get_user fallback"
+                )
+                
+                # Try get_user as fallback since this might be a user/channel with different header
+                try:
+                    search_results = ytmusic.get_user(channelId)
+                    logger.info(f"get_user fallback successful for {channelId}")
+                    
+                    # Add a note that we used the user endpoint
+                    return {
+                        "message": "OK",
+                        "query": channelId,
+                        "result": search_results,
+                        "note": "Retrieved using user endpoint due to API structure differences"
+                    }
+                except Exception as user_error:
+                    logger.error(f"Both get_artist and get_user failed for {channelId}: {str(user_error)}")
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "error": "API structure error",
+                            "message": "YouTube Music API has inconsistent header renderer formats",
+                            "channelId": channelId,
+                            "recommendation": "Try using /browse/user/{channelId} endpoint instead",
+                            "technical_details": f"get_artist error: {error_str}, get_user error: {str(user_error)}",
+                        },
+                    ) from artist_error
+            else:
+                # Different KeyError, re-raise to be handled below
+                raise
 
         if not search_results:
             raise HTTPException(status_code=404, detail="Artist not found")
 
         return {"message": "OK", "query": channelId, "result": search_results}
 
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+
     except KeyError as e:
-        logger.error(f"KeyError in get_artist for {channelId}: {str(e)}")
+        error_str = str(e)
+        
+        # Check if this looks like a playlist/album ID instead of artist/channel ID
+        if channelId.startswith("VL") or channelId.startswith("OLAK") or channelId.startswith("PL"):
+            # Log as INFO (not ERROR) since this is an expected client error
+            logger.info(f"Client attempted to use playlist/album ID '{channelId}' on artist endpoint")
+            
+            # Determine the correct endpoint and clean ID
+            if channelId.startswith("VL"):
+                # Remove VL prefix for playlist endpoint
+                clean_id = channelId[2:]  # Remove "VL" prefix
+                recommendation = f"Use /playlists/{clean_id} for playlists"
+            elif channelId.startswith("OLAK"):
+                recommendation = f"Use /playlists/{channelId} or /browse/album/{channelId} for albums"
+            else:  # Starts with PL
+                recommendation = f"Use /playlists/{channelId} for playlists"
+            
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Invalid ID type",
+                    "message": "This appears to be a playlist or album ID, not an artist/channel ID",
+                    "channelId": channelId,
+                    "recommendation": recommendation,
+                },
+            ) from e
+        
+        # Check for different page structure (might be a playlist/album page)
+        if "singleColumnBrowseResultsRenderer" in error_str and ("musicResponsiveHeaderRenderer" in error_str or "musicDetailHeaderRenderer" in error_str):
+            # Log as INFO (not ERROR) since this is an expected client error
+            logger.info(f"Client attempted to use playlist/album ID '{channelId}' on artist endpoint (detected by page structure)")
+            
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Wrong endpoint",
+                    "message": "This ID returns a playlist/album page, not an artist page",
+                    "channelId": channelId,
+                    "recommendation": "Use /playlists/{browseId} for playlists or /browse/album/{browseId} for albums",
+                },
+            ) from e
+        
+        # Log genuine errors
+        logger.error(f"KeyError in get_artist for {channelId}: {error_str}")
+        
         raise HTTPException(
             status_code=503,
             detail={
                 "error": "API structure error",
                 "message": "YouTube Music API structure has changed, artist data temporarily unavailable",
                 "channelId": channelId,
-                "technical_details": str(e),
+                "technical_details": error_str,
             },
-        )
+        ) from e
 
     except Exception as e:
         logger.error(f"Unexpected error in get_artist for {channelId}: {str(e)}")
         if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail=f"Artist with ID {channelId} not found")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Artist with ID {channelId} not found"
+            ) from e
 
         raise HTTPException(
             status_code=500,
@@ -76,7 +165,7 @@ async def get_artist(channelId: str):
                 "message": "An unexpected error occurred while fetching artist data",
                 "channelId": channelId,
             },
-        )
+        ) from e
 
 
 @router.get("/artist_videos/{channelId}")
@@ -263,29 +352,101 @@ async def get_album_browse_id(audioPlaylistId: str):
 async def get_user(channelId: str):
     try:
         ytmusic = YTMusic()
-        results = ytmusic.get_user(channelId)
+        results = None
+        
+        # Try get_user first
+        try:
+            results = ytmusic.get_user(channelId)
+        except Exception as user_error:
+            # Check if this is the musicImmersiveHeaderRenderer issue
+            error_str = str(user_error)
+            if "musicVisualHeaderRenderer" in error_str and "musicImmersiveHeaderRenderer" in error_str:
+                logger.info(
+                    f"get_user failed for {channelId} due to header renderer mismatch, trying get_artist fallback"
+                )
+                
+                # Try get_artist as fallback since this might be an artist channel
+                try:
+                    results = ytmusic.get_artist(channelId)
+                    logger.info(f"get_artist fallback successful for {channelId}")
+                    
+                    # Add a note that we used the artist endpoint
+                    return {
+                        "message": "OK",
+                        "query": channelId,
+                        "result": results,
+                        "note": "Retrieved using artist endpoint due to API structure changes"
+                    }
+                except Exception as artist_error:
+                    logger.error(f"Both get_user and get_artist failed for {channelId}: {str(artist_error)}")
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "error": "API structure error",
+                            "message": "YouTube Music API structure has changed (musicImmersiveHeaderRenderer not yet supported by ytmusicapi)",
+                            "channelId": channelId,
+                            "recommendation": "Try using /browse/artist/{channelId} endpoint instead",
+                            "technical_details": error_str,
+                        },
+                    ) from user_error
+            else:
+                # Different error, re-raise to be handled below
+                raise
 
         if not results:
             raise HTTPException(status_code=404, detail="User not found")
 
         return {"message": "OK", "query": channelId, "result": results}
 
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+
     except KeyError as e:
-        logger.error(f"KeyError in get_user for {channelId}: {str(e)}")
+        error_str = str(e)
+        
+        # Check if this looks like a playlist/album ID instead of user/channel ID
+        if channelId.startswith("VL") or channelId.startswith("OLAK") or channelId.startswith("PL"):
+            # Log as INFO (not ERROR) since this is an expected client error
+            logger.info(f"Client attempted to use playlist/album ID '{channelId}' on user endpoint")
+            
+            # Determine the correct endpoint and clean ID
+            if channelId.startswith("VL"):
+                clean_id = channelId[2:]  # Remove "VL" prefix
+                recommendation = f"Use /playlists/{clean_id} for playlists"
+            elif channelId.startswith("OLAK"):
+                recommendation = f"Use /playlists/{channelId} or /browse/album/{channelId} for albums"
+            else:  # Starts with PL
+                recommendation = f"Use /playlists/{channelId} for playlists"
+            
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Invalid ID type",
+                    "message": "This appears to be a playlist or album ID, not a user/channel ID",
+                    "channelId": channelId,
+                    "recommendation": recommendation,
+                },
+            ) from e
+        
+        # Log genuine errors
+        logger.error(f"KeyError in get_user for {channelId}: {error_str}")
         raise HTTPException(
             status_code=503,
             detail={
                 "error": "API structure error",
                 "message": "YouTube Music API structure has changed, user data temporarily unavailable",
                 "channelId": channelId,
-                "technical_details": str(e),
+                "technical_details": error_str,
             },
-        )
+        ) from e
 
     except Exception as e:
         logger.error(f"Unexpected error in get_user for {channelId}: {str(e)}")
         if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail=f"User with ID {channelId} not found")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"User with ID {channelId} not found"
+            ) from e
 
         raise HTTPException(
             status_code=500,
@@ -294,7 +455,7 @@ async def get_user(channelId: str):
                 "message": "An unexpected error occurred while fetching user data",
                 "channelId": channelId,
             },
-        )
+        ) from e
 
 
 @router.get("/user_playlists/{channelId}")

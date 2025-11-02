@@ -31,8 +31,11 @@ class YTMusicErrorHandler:
                     return await func(*args, **kwargs)
 
                 except KeyError as e:
+                    import traceback
+                    error_traceback = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
                     logger.error(
-                        f"KeyError in {operation_name}{f' for {identifier}' if identifier else ''}: {str(e)}"
+                        f"KeyError in {operation_name}{f' for {identifier}' if identifier else ''}: {str(e)}\n"
+                        f"Traceback:\n{error_traceback}"
                     )
 
                     # Provide more specific error messages based on the KeyError
@@ -94,8 +97,12 @@ class YTMusicErrorHandler:
                     )
 
                 except Exception as e:
+                    import traceback
+                    error_traceback = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
                     logger.error(
-                        f"Unexpected error in {operation_name}{f' for {identifier}' if identifier else ''}: {str(e)}"
+                        f"Unexpected error in {operation_name}{f' for {identifier}' if identifier else ''}: "
+                        f"{type(e).__name__}: {str(e)}\n"
+                        f"Traceback:\n{error_traceback}"
                     )
 
                     error_message = str(e).lower()
