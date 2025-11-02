@@ -7,7 +7,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/playlist/{playlistId}")
+@router.get("/{playlistId}")
 def get_playlist(
     playlistId: str, limit: int | None = 100, related: bool = False, suggestions_limit: int = 0
 ):
@@ -51,7 +51,7 @@ def get_playlist(
         )
 
 
-@router.post("/playlist")
+@router.post("/")
 async def create_playlist(
     title: str,
     description: str,
@@ -121,7 +121,7 @@ async def create_playlist(
         )
 
 
-@router.patch("/playlist")
+@router.patch("/")
 async def edit_playlist(
     playlistId: str,
     title: str | None = None,
@@ -197,7 +197,7 @@ async def edit_playlist(
         )
 
 
-@router.delete("/playlist/{playlistId}")
+@router.delete("/{playlistId}")
 async def delete_playlist(playlistId: str):
     try:
         ytmusic = YTMusic()
@@ -240,7 +240,7 @@ async def delete_playlist(playlistId: str):
         )
 
 
-@router.post("/playlist_items")
+@router.post("/items")
 async def add_playlist_items(
     playlistId: str,
     videoIds: list[str] | None = None,
@@ -308,7 +308,7 @@ async def add_playlist_items(
         )
 
 
-@router.delete("/playlist_items/{playlistId}")
+@router.delete("/items/{playlistId}")
 async def remove_playlist_items(playlistId: str, videos: list[dict]):
     try:
         if not videos:
