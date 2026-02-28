@@ -147,8 +147,8 @@ async def search(
         )
 
 
-@router.get("/search_suggestions")
-async def get_search_suggestions(
+@router.get("/suggestions")
+async def get_suggestions(
     query: str = Query(..., description="Search query"), detailed_runs: bool = False
 ):
     try:
@@ -199,8 +199,8 @@ async def get_search_suggestions(
         )
 
 
-@router.delete("/search_suggestions")
-async def remove_search_suggestions(
+@router.delete("/suggestions")
+async def remove_suggestions(
     suggestions: list[dict[str, Any]], indices: list[int] | None = None
 ):
     try:

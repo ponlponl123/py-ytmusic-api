@@ -8,9 +8,7 @@
   "paths": {
     "/search/health": {
       "get": {
-        "tags": [
-          "Search"
-        ],
+        "tags": ["Search"],
         "summary": "Health Check",
         "description": "Health check endpoint to test basic YTMusic API functionality",
         "operationId": "health_check_search_health_get",
@@ -28,9 +26,7 @@
     },
     "/search/search": {
       "get": {
-        "tags": [
-          "Search"
-        ],
+        "tags": ["Search"],
         "summary": "Search",
         "operationId": "search_search_search_get",
         "parameters": [
@@ -120,13 +116,11 @@
         }
       }
     },
-    "/search/search_suggestions": {
+    "/search/suggestions": {
       "get": {
-        "tags": [
-          "Search"
-        ],
+        "tags": ["Search"],
         "summary": "Get Search Suggestions",
-        "operationId": "get_search_suggestions_search_search_suggestions_get",
+        "operationId": "get_suggestions_search_suggestions_get",
         "parameters": [
           {
             "name": "query",
@@ -172,17 +166,15 @@
         }
       },
       "delete": {
-        "tags": [
-          "Search"
-        ],
+        "tags": ["Search"],
         "summary": "Remove Search Suggestions",
-        "operationId": "remove_search_suggestions_search_search_suggestions_delete",
+        "operationId": "remove_suggestions_search_suggestions_delete",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_remove_search_suggestions_search_search_suggestions_delete"
+                "$ref": "#/components/schemas/Body_remove_suggestions_search_suggestions_delete"
               }
             }
           }
@@ -211,9 +203,7 @@
     },
     "/browse/home": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Home",
         "operationId": "get_home_browse_home_get",
         "parameters": [
@@ -252,9 +242,7 @@
     },
     "/browse/artist/{channelId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Artist",
         "operationId": "get_artist_browse_artist__channelId__get",
         "parameters": [
@@ -292,9 +280,7 @@
     },
     "/browse/artist_videos/{channelId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Artist Videos",
         "operationId": "get_artist_videos_browse_artist_videos__channelId__get",
         "parameters": [
@@ -332,9 +318,7 @@
     },
     "/browse/artist_albums/{channelId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Artist Albums",
         "operationId": "get_artist_albums_browse_artist_albums__channelId__get",
         "parameters": [
@@ -380,11 +364,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "Recency",
-                    "Popularity",
-                    "Alphabetical order"
-                  ],
+                  "enum": ["Recency", "Popularity", "Alphabetical order"],
                   "type": "string"
                 },
                 {
@@ -419,9 +399,7 @@
     },
     "/browse/album/{browseId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Album",
         "operationId": "get_album_browse_album__browseId__get",
         "parameters": [
@@ -459,9 +437,7 @@
     },
     "/browse/album_browse_id/{audioPlaylistId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Album Browse Id",
         "operationId": "get_album_browse_id_browse_album_browse_id__audioPlaylistId__get",
         "parameters": [
@@ -499,9 +475,7 @@
     },
     "/browse/user/{channelId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get User",
         "operationId": "get_user_browse_user__channelId__get",
         "parameters": [
@@ -539,9 +513,7 @@
     },
     "/browse/user_playlists/{channelId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get User Playlists",
         "operationId": "get_user_playlists_browse_user_playlists__channelId__get",
         "parameters": [
@@ -579,9 +551,7 @@
     },
     "/browse/user_videos/{channelId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get User Videos",
         "operationId": "get_user_videos_browse_user_videos__channelId__get",
         "parameters": [
@@ -619,9 +589,7 @@
     },
     "/browse/song/{videoId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Song",
         "operationId": "get_song_browse_song__videoId__get",
         "parameters": [
@@ -675,9 +643,7 @@
     },
     "/browse/related/{browseId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Related By Browse Id",
         "operationId": "get_related_by_browse_id_browse_related__browseId__get",
         "parameters": [
@@ -715,9 +681,7 @@
     },
     "/browse/song_related/{songId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Song Related By Song Id",
         "operationId": "get_song_related_by_song_id_browse_song_related__songId__get",
         "parameters": [
@@ -755,9 +719,7 @@
     },
     "/browse/lyrics/{browseId}": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Lyrics",
         "operationId": "get_lyrics_browse_lyrics__browseId__get",
         "parameters": [
@@ -812,9 +774,7 @@
     },
     "/browse/tasteprofile": {
       "get": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Get Tasteprofile",
         "operationId": "get_tasteprofile_browse_tasteprofile_get",
         "responses": {
@@ -829,9 +789,7 @@
         }
       },
       "post": {
-        "tags": [
-          "Browse"
-        ],
+        "tags": ["Browse"],
         "summary": "Set Tasteprofile",
         "operationId": "set_tasteprofile_browse_tasteprofile_post",
         "requestBody": {
@@ -868,9 +826,7 @@
     },
     "/explore/mood_playlists/{query}": {
       "get": {
-        "tags": [
-          "Explore"
-        ],
+        "tags": ["Explore"],
         "summary": "Get Mood Playlists",
         "operationId": "get_mood_playlists_explore_mood_playlists__query__get",
         "parameters": [
@@ -908,9 +864,7 @@
     },
     "/explore/charts/{country}": {
       "get": {
-        "tags": [
-          "Explore"
-        ],
+        "tags": ["Explore"],
         "summary": "Get Charts",
         "operationId": "get_charts_explore_charts__country__get",
         "parameters": [
@@ -948,9 +902,7 @@
     },
     "/watch/mood_categories": {
       "get": {
-        "tags": [
-          "Watch"
-        ],
+        "tags": ["Watch"],
         "summary": "Get Mood Categories",
         "operationId": "get_mood_categories_watch_mood_categories_get",
         "responses": {
@@ -967,9 +919,7 @@
     },
     "/watch/watch/{videoId}": {
       "get": {
-        "tags": [
-          "Watch"
-        ],
+        "tags": ["Watch"],
         "summary": "Get Watch Playlist",
         "operationId": "get_watch_playlist_watch_watch__videoId__get",
         "parameters": [
@@ -1053,9 +1003,7 @@
     },
     "/library/library_playlists": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Get Library Playlists",
         "operationId": "get_library_playlists_library_library_playlists_get",
         "parameters": [
@@ -1101,9 +1049,7 @@
     },
     "/library/library_songs": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Get Library Songs",
         "operationId": "get_library_songs_library_library_songs_get",
         "parameters": [
@@ -1134,11 +1080,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "a_to_z",
-                    "z_to_a",
-                    "recently_added"
-                  ],
+                  "enum": ["a_to_z", "z_to_a", "recently_added"],
                   "type": "string"
                 },
                 {
@@ -1173,9 +1115,7 @@
     },
     "/library/library_albums": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Wrapper",
         "operationId": "wrapper_library_library_albums_get",
         "parameters": [
@@ -1220,9 +1160,7 @@
     },
     "/library/library_artists": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Wrapper",
         "operationId": "wrapper_library_library_artists_get",
         "parameters": [
@@ -1267,9 +1205,7 @@
     },
     "/library/library_subscriptions": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Wrapper",
         "operationId": "wrapper_library_library_subscriptions_get",
         "parameters": [
@@ -1314,9 +1250,7 @@
     },
     "/library/library_podcasts": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Wrapper",
         "operationId": "wrapper_library_library_podcasts_get",
         "parameters": [
@@ -1361,9 +1295,7 @@
     },
     "/library/library_channels": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Wrapper",
         "operationId": "wrapper_library_library_channels_get",
         "parameters": [
@@ -1408,9 +1340,7 @@
     },
     "/library/liked_songs": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Wrapper",
         "operationId": "wrapper_library_liked_songs_get",
         "parameters": [
@@ -1455,9 +1385,7 @@
     },
     "/library/saved_episodes": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Wrapper",
         "operationId": "wrapper_library_saved_episodes_get",
         "parameters": [
@@ -1502,9 +1430,7 @@
     },
     "/library/history": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Wrapper",
         "operationId": "wrapper_library_history_get",
         "parameters": [
@@ -1547,9 +1473,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Remove History Items",
         "operationId": "remove_history_items_library_history_delete",
         "requestBody": {
@@ -1590,9 +1514,7 @@
     },
     "/library/account_info": {
       "get": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Wrapper",
         "operationId": "wrapper_library_account_info_get",
         "parameters": [
@@ -1637,9 +1559,7 @@
     },
     "/library/history/{videoId}": {
       "post": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Add History Item",
         "operationId": "add_history_item_library_history__videoId__post",
         "parameters": [
@@ -1677,9 +1597,7 @@
     },
     "/library/rate_song/{videoId}": {
       "post": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Rate Song",
         "operationId": "rate_song_library_rate_song__videoId__post",
         "parameters": [
@@ -1727,9 +1645,7 @@
     },
     "/library/rate_playlist/{playlistId}": {
       "post": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Rate Playlist",
         "operationId": "rate_playlist_library_rate_playlist__playlistId__post",
         "parameters": [
@@ -1777,9 +1693,7 @@
     },
     "/library/subscribe_artists": {
       "post": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Subscribe Artists",
         "operationId": "subscribe_artists_library_subscribe_artists_post",
         "requestBody": {
@@ -1818,9 +1732,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Unsubscribe Artists",
         "operationId": "unsubscribe_artists_library_subscribe_artists_delete",
         "requestBody": {
@@ -1861,9 +1773,7 @@
     },
     "/library/song_library_status": {
       "patch": {
-        "tags": [
-          "Library"
-        ],
+        "tags": ["Library"],
         "summary": "Edit Song Library Status",
         "operationId": "edit_song_library_status_library_song_library_status_patch",
         "requestBody": {
@@ -1904,9 +1814,7 @@
     },
     "/playlists/playlist/{playlistId}": {
       "get": {
-        "tags": [
-          "Playlists"
-        ],
+        "tags": ["Playlists"],
         "summary": "Get Playlist",
         "operationId": "get_playlist_playlists_playlist__playlistId__get",
         "parameters": [
@@ -1979,9 +1887,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Playlists"
-        ],
+        "tags": ["Playlists"],
         "summary": "Delete Playlist",
         "operationId": "delete_playlist_playlists_playlist__playlistId__delete",
         "parameters": [
@@ -2019,9 +1925,7 @@
     },
     "/playlists/playlist": {
       "post": {
-        "tags": [
-          "Playlists"
-        ],
+        "tags": ["Playlists"],
         "summary": "Create Playlist",
         "operationId": "create_playlist_playlists_playlist_post",
         "parameters": [
@@ -2101,9 +2005,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "Playlists"
-        ],
+        "tags": ["Playlists"],
         "summary": "Edit Playlist",
         "operationId": "edit_playlist_playlists_playlist_patch",
         "parameters": [
@@ -2251,9 +2153,7 @@
     },
     "/playlists/playlist_items": {
       "post": {
-        "tags": [
-          "Playlists"
-        ],
+        "tags": ["Playlists"],
         "summary": "Add Playlist Items",
         "operationId": "add_playlist_items_playlists_playlist_items_post",
         "parameters": [
@@ -2337,9 +2237,7 @@
     },
     "/playlists/playlist_items/{playlistId}": {
       "delete": {
-        "tags": [
-          "Playlists"
-        ],
+        "tags": ["Playlists"],
         "summary": "Remove Playlist Items",
         "operationId": "remove_playlist_items_playlists_playlist_items__playlistId__delete",
         "parameters": [
@@ -2391,9 +2289,7 @@
     },
     "/podcasts/channel/{channelId}": {
       "get": {
-        "tags": [
-          "Podcasts"
-        ],
+        "tags": ["Podcasts"],
         "summary": "Get Channel",
         "operationId": "get_channel_podcasts_channel__channelId__get",
         "parameters": [
@@ -2431,9 +2327,7 @@
     },
     "/podcasts/channel_episodes/{channelId}": {
       "get": {
-        "tags": [
-          "Podcasts"
-        ],
+        "tags": ["Podcasts"],
         "summary": "Get Channel Episodes",
         "operationId": "get_channel_episodes_podcasts_channel_episodes__channelId__get",
         "parameters": [
@@ -2480,9 +2374,7 @@
     },
     "/podcasts/podcast/{playlistId}": {
       "get": {
-        "tags": [
-          "Podcasts"
-        ],
+        "tags": ["Podcasts"],
         "summary": "Wrapper",
         "operationId": "wrapper_podcasts_podcast__playlistId__get",
         "parameters": [
@@ -2527,9 +2419,7 @@
     },
     "/podcasts/episode/{videoId}": {
       "get": {
-        "tags": [
-          "Podcasts"
-        ],
+        "tags": ["Podcasts"],
         "summary": "Wrapper",
         "operationId": "wrapper_podcasts_episode__videoId__get",
         "parameters": [
@@ -2574,9 +2464,7 @@
     },
     "/podcasts/episodes_playlist/{playlist_id}": {
       "get": {
-        "tags": [
-          "Podcasts"
-        ],
+        "tags": ["Podcasts"],
         "summary": "Wrapper",
         "operationId": "wrapper_podcasts_episodes_playlist__playlist_id__get",
         "parameters": [
@@ -2621,9 +2509,7 @@
     },
     "/uploads/library_upload_songs": {
       "get": {
-        "tags": [
-          "Uploads"
-        ],
+        "tags": ["Uploads"],
         "summary": "Wrapper",
         "operationId": "wrapper_uploads_library_upload_songs_get",
         "parameters": [
@@ -2668,9 +2554,7 @@
     },
     "/uploads/library_upload_artists": {
       "get": {
-        "tags": [
-          "Uploads"
-        ],
+        "tags": ["Uploads"],
         "summary": "Wrapper",
         "operationId": "wrapper_uploads_library_upload_artists_get",
         "parameters": [
@@ -2715,9 +2599,7 @@
     },
     "/uploads/library_upload_albums": {
       "get": {
-        "tags": [
-          "Uploads"
-        ],
+        "tags": ["Uploads"],
         "summary": "Wrapper",
         "operationId": "wrapper_uploads_library_upload_albums_get",
         "parameters": [
@@ -2762,9 +2644,7 @@
     },
     "/uploads/library_upload_artist/{browseId}": {
       "get": {
-        "tags": [
-          "Uploads"
-        ],
+        "tags": ["Uploads"],
         "summary": "Wrapper",
         "operationId": "wrapper_uploads_library_upload_artist__browseId__get",
         "parameters": [
@@ -2809,9 +2689,7 @@
     },
     "/uploads/library_upload_album/{browseId}": {
       "get": {
-        "tags": [
-          "Uploads"
-        ],
+        "tags": ["Uploads"],
         "summary": "Wrapper",
         "operationId": "wrapper_uploads_library_upload_album__browseId__get",
         "parameters": [
@@ -2856,9 +2734,7 @@
     },
     "/uploads/upload_song/{filepath}": {
       "post": {
-        "tags": [
-          "Uploads"
-        ],
+        "tags": ["Uploads"],
         "summary": "Upload Song",
         "operationId": "upload_song_uploads_upload_song__filepath__post",
         "parameters": [
@@ -2896,9 +2772,7 @@
     },
     "/uploads/upload_entity/{entityId}": {
       "delete": {
-        "tags": [
-          "Uploads"
-        ],
+        "tags": ["Uploads"],
         "summary": "Delete Upload Entity",
         "operationId": "delete_upload_entity_uploads_upload_entity__entityId__delete",
         "parameters": [
@@ -2988,7 +2862,7 @@
         "type": "object",
         "title": "Body_create_playlist_playlists_playlist_post"
       },
-      "Body_remove_search_suggestions_search_search_suggestions_delete": {
+      "Body_remove_suggestions_search_suggestions_delete": {
         "properties": {
           "suggestions": {
             "items": {
@@ -3013,10 +2887,8 @@
           }
         },
         "type": "object",
-        "required": [
-          "suggestions"
-        ],
-        "title": "Body_remove_search_suggestions_search_search_suggestions_delete"
+        "required": ["suggestions"],
+        "title": "Body_remove_suggestions_search_suggestions_delete"
       },
       "Body_set_tasteprofile_browse_tasteprofile_post": {
         "properties": {
@@ -3040,9 +2912,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "artists"
-        ],
+        "required": ["artists"],
         "title": "Body_set_tasteprofile_browse_tasteprofile_post"
       },
       "HTTPValidationError": {
@@ -3084,11 +2954,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
+        "required": ["loc", "msg", "type"],
         "title": "ValidationError"
       }
     }
