@@ -1,1 +1,1 @@
-from .main import *
+# src package — application entry point is src.main

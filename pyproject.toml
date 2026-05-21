@@ -1,0 +1,171 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "py-ytmusic-api"
+version = "1.0.0"
+description = "A comprehensive YouTube Music API wrapper with robust error handling"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.34.0",
+    "ytmusicapi>=1.12.0",
+    "httpx>=0.28.1",
+    "requests>=2.34.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.3",
+    "anyio[trio]>=4.13.0",
+    "pytest-anyio>=0.0.0",
+    "black>=24.0.0",
+    "isort>=5.13.0",
+    "pylint>=4.0.5",
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocs-swagger-ui-tag>=0.6.0",
+]
+
+# ─── Formatter ────────────────────────────────────────────────────────────────
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+include = '\.pyi?$'
+
+# ─── Import Sorter ────────────────────────────────────────────────────────────
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+
+# ─── Test Runner ──────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "integration: mark a test as an integration test (requires live server)",
+]
+asyncio_mode = "auto"
+
+# ─── Pylint ───────────────────────────────────────────────────────────────────
+
+[tool.pylint.main]
+jobs = 1
+init-hook = "import sys; sys.path.insert(0, '.')"
+persistent = true
+
+[tool.pylint."messages control"]
+disable = [
+    "missing-module-docstring",     # C0114
+    "missing-class-docstring",      # C0115
+    "missing-function-docstring",   # C0116
+    "missing-final-newline",        # C0304
+    "too-few-public-methods",       # R0903
+    "too-many-arguments",           # R0913
+    "unused-argument",              # W0613
+    "invalid-name",                 # C0103
+    "duplicate-code",               # R0801
+    "broad-exception-caught",       # W0718
+    "broad-exception-raised",       # W0719
+]
+enable = ["c-extension-no-member"]
+
+[tool.pylint.reports]
+output-format = "text"
+reports = false
+score = true
+
+[tool.pylint.refactoring]
+max-nested-blocks = 5
+never-returning-functions = ["sys.exit", "argparse.parse_error"]
+
+[tool.pylint.similarities]
+ignore-comments = true
+ignore-docstrings = true
+ignore-imports = false
+ignore-signatures = false
+min-similarity-lines = 4
+
+[tool.pylint.spelling]
+max-spelling-suggestions = 4
+spelling-store-unknown-words = false
+
+
+
+[tool.pylint.typecheck]
+contextmanager-decorators = ["contextlib.contextmanager"]
+ignore-none = true
+ignore-on-opaque-inference = true
+ignored-classes = ["optparse.Values", "thread._local", "_thread._local"]
+
+[tool.pylint.variables]
+callbacks = ["cb_", "_cb"]
+dummy-variables-rgx = "_+$|(_[a-zA-Z0-9_]*[a-zA-Z0-9]+?$)|dummy|^ignored_|^unused_"
+ignored-argument-names = "_.*|^ignored_|^unused_"
+init-import = false
+
+[tool.pylint.classes]
+defining-attr-methods = ["__init__", "__new__", "setUp", "__post_init__"]
+exclude-protected = ["_asdict", "_fields", "_replace", "_source", "_make"]
+valid-classmethod-first-arg = ["cls"]
+valid-metaclass-classmethod-first-arg = ["cls"]
+
+[tool.pylint.design]
+max-args = 7
+max-attributes = 10
+max-bool-expr = 5
+max-branches = 12
+max-locals = 15
+max-parents = 7
+max-public-methods = 20
+min-public-methods = 1
+max-returns = 6
+max-statements = 50
+
+[tool.pylint.exceptions]
+overgeneral-exceptions = ["builtins.BaseException", "builtins.Exception"]
+
+[tool.pylint.format]
+ignore-long-lines = '^\s*(# )?<?https?://\S+>?$'
+indent-after-paren = 4
+indent-string = "    "
+max-line-length = 100
+max-module-lines = 1000
+single-line-class-stmt = false
+single-line-if-stmt = false
+
+
+
+[tool.pylint.logging]
+logging-format-style = "old"
+logging-modules = ["logging"]
+
+[tool.pylint.miscellaneous]
+notes = ["FIXME", "XXX", "TODO"]
+
+[tool.pylint.basic]
+argument-naming-style = "snake_case"
+attr-naming-style = "snake_case"
+bad-names = ["foo", "bar", "baz", "toto", "tutu", "tata"]
+class-attribute-naming-style = "any"
+class-naming-style = "PascalCase"
+const-naming-style = "UPPER_CASE"
+docstring-min-length = -1
+function-naming-style = "snake_case"
+good-names = ["i", "j", "k", "ex", "Run", "_"]
+include-naming-hint = false
+inlinevar-naming-style = "any"
+method-naming-style = "snake_case"
+module-naming-style = "snake_case"
+no-docstring-rgx = "^_"
+property-classes = ["abc.abstractproperty"]
+variable-naming-style = "snake_case"

@@ -2,909 +2,445 @@ import logging
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from ytmusicapi import YTMusic
+
+from src.utils.client import YTMusicClient
+from src.utils.error_handlers import handle_browse_errors
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 @router.get("/home")
+@handle_browse_errors
 async def get_home(limit: int = 3):
-    try:
-        ytmusic = YTMusic()
-        search_results = ytmusic.get_home(limit)
+    ytmusic = YTMusicClient.get_client()
+    search_results = ytmusic.get_home(limit)
 
-        if not search_results:
-            raise HTTPException(status_code=404, detail="No home content found")
+    if not search_results:
+        raise HTTPException(status_code=404, detail="No home content found")
 
-        return {"message": "OK", "limit": limit, "result": search_results}
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_home: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, home content temporarily unavailable",
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_home: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching home content",
-            },
-        )
+    return {"message": "OK", "limit": limit, "result": search_results}
 
 
 @router.get("/artist/{channelId}")
+@handle_browse_errors
 async def get_artist(channelId: str):
+    # Perform ID validation first to prevent unnecessary requests or handle errors gracefully
+    if channelId.startswith("VL") or channelId.startswith("OLAK") or channelId.startswith("PL"):
+        logger.info("Client attempted to use playlist/album ID '%s' on artist endpoint", channelId)
+        if channelId.startswith("VL"):
+            clean_id = channelId[2:]
+            recommendation = f"Use /playlists/{clean_id} for playlists"
+        elif channelId.startswith("OLAK"):
+            recommendation = f"Use /playlists/{channelId} or /browse/album/{channelId} for albums"
+        else:
+            recommendation = f"Use /playlists/{channelId} for playlists"
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Invalid ID type",
+                "message": "This appears to be a playlist or album ID, not an artist/channel ID",
+                "channelId": channelId,
+                "recommendation": recommendation,
+            },
+        )
+
+    ytmusic = YTMusicClient.get_client()
     try:
-        ytmusic = YTMusic()
-        search_results = None
-        
-        # Try get_artist first
-        try:
-            search_results = ytmusic.get_artist(channelId)
-        except KeyError as artist_error:
-            # Check if this is a header renderer mismatch issue
-            error_str = str(artist_error)
-            if "musicImmersiveHeaderRenderer" in error_str or "musicVisualHeaderRenderer" in error_str:
-                logger.info(
-                    f"get_artist failed for {channelId} due to header renderer issue ({error_str}), trying get_user fallback"
+        search_results = ytmusic.get_artist(channelId)
+    except KeyError as artist_error:
+        error_str = str(artist_error)
+        if "musicImmersiveHeaderRenderer" in error_str or "musicVisualHeaderRenderer" in error_str:
+            logger.info(
+                "get_artist failed for %s due to header renderer issue (%s), "
+                "trying get_user fallback",
+                channelId,
+                error_str,
+            )
+            try:
+                search_results = ytmusic.get_user(channelId)
+                logger.info("get_user fallback successful for %s", channelId)
+                return {
+                    "message": "OK",
+                    "query": channelId,
+                    "result": search_results,
+                    "note": "Retrieved using user endpoint due to API structure differences",
+                }
+            except Exception as user_error:
+                logger.error(
+                    "Both get_artist and get_user failed for %s: %s", channelId, user_error
                 )
-                
-                # Try get_user as fallback since this might be a user/channel with different header
-                try:
-                    search_results = ytmusic.get_user(channelId)
-                    logger.info(f"get_user fallback successful for {channelId}")
-                    
-                    # Add a note that we used the user endpoint
-                    return {
-                        "message": "OK",
-                        "query": channelId,
-                        "result": search_results,
-                        "note": "Retrieved using user endpoint due to API structure differences"
-                    }
-                except Exception as user_error:
-                    logger.error(f"Both get_artist and get_user failed for {channelId}: {str(user_error)}")
-                    raise HTTPException(
-                        status_code=503,
-                        detail={
-                            "error": "API structure error",
-                            "message": "YouTube Music API has inconsistent header renderer formats",
-                            "channelId": channelId,
-                            "recommendation": "Try using /browse/user/{channelId} endpoint instead",
-                            "technical_details": f"get_artist error: {error_str}, get_user error: {str(user_error)}",
-                        },
-                    ) from artist_error
-            else:
-                # Different KeyError, re-raise to be handled below
-                raise
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "API structure error",
+                        "message": "YouTube Music API has inconsistent header renderer formats",
+                        "channelId": channelId,
+                        "recommendation": "Try using /browse/user/{channelId} endpoint instead",
+                        "technical_details": (
+                            f"get_artist error: {error_str}, " f"get_user error: {user_error}"
+                        ),
+                    },
+                ) from artist_error
 
-        if not search_results:
-            raise HTTPException(status_code=404, detail="Artist not found")
-
-        return {"message": "OK", "query": channelId, "result": search_results}
-
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions
-
-    except KeyError as e:
-        error_str = str(e)
-        
-        # Check if this looks like a playlist/album ID instead of artist/channel ID
-        if channelId.startswith("VL") or channelId.startswith("OLAK") or channelId.startswith("PL"):
-            # Log as INFO (not ERROR) since this is an expected client error
-            logger.info(f"Client attempted to use playlist/album ID '{channelId}' on artist endpoint")
-            
-            # Determine the correct endpoint and clean ID
-            if channelId.startswith("VL"):
-                # Remove VL prefix for playlist endpoint
-                clean_id = channelId[2:]  # Remove "VL" prefix
-                recommendation = f"Use /playlists/{clean_id} for playlists"
-            elif channelId.startswith("OLAK"):
-                recommendation = f"Use /playlists/{channelId} or /browse/album/{channelId} for albums"
-            else:  # Starts with PL
-                recommendation = f"Use /playlists/{channelId} for playlists"
-            
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "Invalid ID type",
-                    "message": "This appears to be a playlist or album ID, not an artist/channel ID",
-                    "channelId": channelId,
-                    "recommendation": recommendation,
-                },
-            ) from e
-        
         # Check for different page structure (might be a playlist/album page)
-        if "singleColumnBrowseResultsRenderer" in error_str and ("musicResponsiveHeaderRenderer" in error_str or "musicDetailHeaderRenderer" in error_str):
-            # Log as INFO (not ERROR) since this is an expected client error
-            logger.info(f"Client attempted to use playlist/album ID '{channelId}' on artist endpoint (detected by page structure)")
-            
+        if "singleColumnBrowseResultsRenderer" in error_str and (
+            "musicResponsiveHeaderRenderer" in error_str or "musicDetailHeaderRenderer" in error_str
+        ):
+            logger.info(
+                "Client attempted to use playlist/album ID '%s' on artist endpoint "
+                "(detected by page structure)",
+                channelId,
+            )
             raise HTTPException(
                 status_code=400,
                 detail={
                     "error": "Wrong endpoint",
                     "message": "This ID returns a playlist/album page, not an artist page",
                     "channelId": channelId,
-                    "recommendation": "Use /playlists/{browseId} for playlists or /browse/album/{browseId} for albums",
+                    "recommendation": (
+                        "Use /playlists/{browseId} for playlists or "
+                        "/browse/album/{browseId} for albums"
+                    ),
                 },
-            ) from e
-        
-        # Log genuine errors
-        logger.error(f"KeyError in get_artist for {channelId}: {error_str}")
-        
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, artist data temporarily unavailable",
-                "channelId": channelId,
-                "technical_details": error_str,
-            },
-        ) from e
+            ) from artist_error
 
-    except Exception as e:
-        logger.error(f"Unexpected error in get_artist for {channelId}: {str(e)}")
-        if "not found" in str(e).lower():
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Artist with ID {channelId} not found"
-            ) from e
+        # If any other KeyError, re-raise to let the decorator handle
+        raise artist_error
 
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching artist data",
-                "channelId": channelId,
-            },
-        ) from e
+    if not search_results:
+        raise HTTPException(status_code=404, detail="Artist not found")
+
+    return {"message": "OK", "query": channelId, "result": search_results}
 
 
 @router.get("/artist_videos/{channelId}")
+@handle_browse_errors
 async def get_artist_videos(channelId: str):
-    try:
-        ytmusic = YTMusic()
-        artist_results = ytmusic.get_artist(channelId)
+    ytmusic = YTMusicClient.get_client()
+    artist_results = ytmusic.get_artist(channelId)
 
-        if not artist_results:
-            raise HTTPException(status_code=404, detail="Artist not found")
+    if not artist_results:
+        raise HTTPException(status_code=404, detail="Artist not found")
 
-        # Check if videos section exists
-        if "videos" not in artist_results or not artist_results["videos"]:
-            raise HTTPException(status_code=404, detail="No videos found for this artist")
+    if "videos" not in artist_results or not artist_results["videos"]:
+        raise HTTPException(status_code=404, detail="No videos found for this artist")
 
-        browseId = artist_results["videos"]["browseId"]
-        videos = ytmusic.get_playlist(browseId)
+    browseId = artist_results["videos"]["browseId"]
+    videos = ytmusic.get_playlist(browseId)
 
-        return {"message": "OK", "query": channelId, "result": videos}
-
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions as they are
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_artist_videos for {channelId}: {str(e)}")
-
-        # Try to provide more specific error based on which key is missing
-        if "videos" in str(e):
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "No videos available",
-                    "message": "This artist doesn't have videos available or the structure has changed",
-                    "channelId": channelId,
-                },
-            )
-
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, artist videos temporarily unavailable",
-                "channelId": channelId,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_artist_videos for {channelId}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching artist videos",
-                "channelId": channelId,
-            },
-        )
+    return {"message": "OK", "query": channelId, "result": videos}
 
 
 @router.get("/artist_albums/{channelId}")
+@handle_browse_errors
 async def get_artist_albums(
     channelId: str,
     params: str,
     limit: int | None = 100,
     order: Literal["Recency", "Popularity", "Alphabetical order"] | None = None,
 ):
-    try:
-        ytmusic = YTMusic()
-        results = ytmusic.get_artist_albums(
-            channelId=channelId, params=params, limit=limit, order=order
-        )
+    ytmusic = YTMusicClient.get_client()
+    results = ytmusic.get_artist_albums(
+        channelId=channelId, params=params, limit=limit, order=order
+    )
 
-        if not results:
-            raise HTTPException(status_code=404, detail="No albums found for this artist")
+    if not results:
+        raise HTTPException(status_code=404, detail="No albums found for this artist")
 
-        return {"message": "OK", "query": channelId, "result": results}
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_artist_albums for {channelId}: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, artist albums temporarily unavailable",
-                "channelId": channelId,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_artist_albums for {channelId}: {str(e)}")
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail=f"Artist with ID {channelId} not found")
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching artist albums",
-                "channelId": channelId,
-            },
-        )
+    return {"message": "OK", "query": channelId, "result": results}
 
 
 @router.get("/album/{browseId}")
+@handle_browse_errors
 async def get_album(browseId: str):
-    try:
-        ytmusic = YTMusic()
-        results = ytmusic.get_album(browseId)
+    ytmusic = YTMusicClient.get_client()
+    results = ytmusic.get_album(browseId)
 
-        if not results:
-            raise HTTPException(status_code=404, detail="Album not found")
+    if not results:
+        raise HTTPException(status_code=404, detail="Album not found")
 
-        return {"message": "OK", "query": browseId, "result": results}
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_album for {browseId}: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, album data temporarily unavailable",
-                "browseId": browseId,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_album for {browseId}: {str(e)}")
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail=f"Album with ID {browseId} not found")
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching album data",
-                "browseId": browseId,
-            },
-        )
+    return {"message": "OK", "query": browseId, "result": results}
 
 
 @router.get("/album_browse_id/{audioPlaylistId}")
+@handle_browse_errors
 async def get_album_browse_id(audioPlaylistId: str):
-    try:
-        ytmusic = YTMusic()
-        results = ytmusic.get_album_browse_id(audioPlaylistId)
+    ytmusic = YTMusicClient.get_client()
+    results = ytmusic.get_album_browse_id(audioPlaylistId)
 
-        if not results:
-            raise HTTPException(status_code=404, detail="Album browse ID not found")
+    if not results:
+        raise HTTPException(status_code=404, detail="Album browse ID not found")
 
-        return {"message": "OK", "query": audioPlaylistId, "result": results}
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_album_browse_id for {audioPlaylistId}: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, album browse ID temporarily unavailable",
-                "audioPlaylistId": audioPlaylistId,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_album_browse_id for {audioPlaylistId}: {str(e)}")
-        if "not found" in str(e).lower():
-            raise HTTPException(
-                status_code=404, detail=f"Album with playlist ID {audioPlaylistId} not found"
-            )
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching album browse ID",
-                "audioPlaylistId": audioPlaylistId,
-            },
-        )
+    return {"message": "OK", "query": audioPlaylistId, "result": results}
 
 
 @router.get("/user/{channelId}")
+@handle_browse_errors
 async def get_user(channelId: str):
+    # Perform ID validation first
+    if channelId.startswith("VL") or channelId.startswith("OLAK") or channelId.startswith("PL"):
+        logger.info("Client attempted to use playlist/album ID '%s' on user endpoint", channelId)
+        if channelId.startswith("VL"):
+            clean_id = channelId[2:]
+            recommendation = f"Use /playlists/{clean_id} for playlists"
+        elif channelId.startswith("OLAK"):
+            recommendation = f"Use /playlists/{channelId} or /browse/album/{channelId} for albums"
+        else:
+            recommendation = f"Use /playlists/{channelId} for playlists"
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Invalid ID type",
+                "message": "This appears to be a playlist or album ID, not a user/channel ID",
+                "channelId": channelId,
+                "recommendation": recommendation,
+            },
+        )
+
+    ytmusic = YTMusicClient.get_client()
     try:
-        ytmusic = YTMusic()
-        results = None
-        
-        # Try get_user first
-        try:
-            results = ytmusic.get_user(channelId)
-        except Exception as user_error:
-            # Check if this is the musicImmersiveHeaderRenderer issue
-            error_str = str(user_error)
-            if "musicVisualHeaderRenderer" in error_str and "musicImmersiveHeaderRenderer" in error_str:
-                logger.info(
-                    f"get_user failed for {channelId} due to header renderer mismatch, trying get_artist fallback"
+        results = ytmusic.get_user(channelId)
+    except Exception as user_error:
+        error_str = str(user_error)
+        if "musicVisualHeaderRenderer" in error_str and "musicImmersiveHeaderRenderer" in error_str:
+            logger.info(
+                "get_user failed for %s due to header renderer mismatch, "
+                "trying get_artist fallback",
+                channelId,
+            )
+            try:
+                results = ytmusic.get_artist(channelId)
+                logger.info("get_artist fallback successful for %s", channelId)
+                return {
+                    "message": "OK",
+                    "query": channelId,
+                    "result": results,
+                    "note": "Retrieved using artist endpoint due to API structure changes",
+                }
+            except Exception as artist_error:
+                logger.error(
+                    "Both get_user and get_artist failed for %s: %s",
+                    channelId,
+                    artist_error,
                 )
-                
-                # Try get_artist as fallback since this might be an artist channel
-                try:
-                    results = ytmusic.get_artist(channelId)
-                    logger.info(f"get_artist fallback successful for {channelId}")
-                    
-                    # Add a note that we used the artist endpoint
-                    return {
-                        "message": "OK",
-                        "query": channelId,
-                        "result": results,
-                        "note": "Retrieved using artist endpoint due to API structure changes"
-                    }
-                except Exception as artist_error:
-                    logger.error(f"Both get_user and get_artist failed for {channelId}: {str(artist_error)}")
-                    raise HTTPException(
-                        status_code=503,
-                        detail={
-                            "error": "API structure error",
-                            "message": "YouTube Music API structure has changed (musicImmersiveHeaderRenderer not yet supported by ytmusicapi)",
-                            "channelId": channelId,
-                            "recommendation": "Try using /browse/artist/{channelId} endpoint instead",
-                            "technical_details": error_str,
-                        },
-                    ) from user_error
-            else:
-                # Different error, re-raise to be handled below
-                raise
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "API structure error",
+                        "message": (
+                            "YouTube Music API structure has changed (musicImmersiveHeaderRenderer "
+                            "not yet supported by ytmusicapi)"
+                        ),
+                        "channelId": channelId,
+                        "recommendation": "Try using /browse/artist/{channelId} endpoint instead",
+                        "technical_details": error_str,
+                    },
+                ) from user_error
+        # Otherwise raise to let decorator handle
+        raise user_error
 
-        if not results:
-            raise HTTPException(status_code=404, detail="User not found")
+    if not results:
+        raise HTTPException(status_code=404, detail="User not found")
 
-        return {"message": "OK", "query": channelId, "result": results}
-
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions
-
-    except KeyError as e:
-        error_str = str(e)
-        
-        # Check if this looks like a playlist/album ID instead of user/channel ID
-        if channelId.startswith("VL") or channelId.startswith("OLAK") or channelId.startswith("PL"):
-            # Log as INFO (not ERROR) since this is an expected client error
-            logger.info(f"Client attempted to use playlist/album ID '{channelId}' on user endpoint")
-            
-            # Determine the correct endpoint and clean ID
-            if channelId.startswith("VL"):
-                clean_id = channelId[2:]  # Remove "VL" prefix
-                recommendation = f"Use /playlists/{clean_id} for playlists"
-            elif channelId.startswith("OLAK"):
-                recommendation = f"Use /playlists/{channelId} or /browse/album/{channelId} for albums"
-            else:  # Starts with PL
-                recommendation = f"Use /playlists/{channelId} for playlists"
-            
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "Invalid ID type",
-                    "message": "This appears to be a playlist or album ID, not a user/channel ID",
-                    "channelId": channelId,
-                    "recommendation": recommendation,
-                },
-            ) from e
-        
-        # Log genuine errors
-        logger.error(f"KeyError in get_user for {channelId}: {error_str}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, user data temporarily unavailable",
-                "channelId": channelId,
-                "technical_details": error_str,
-            },
-        ) from e
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_user for {channelId}: {str(e)}")
-        if "not found" in str(e).lower():
-            raise HTTPException(
-                status_code=404, 
-                detail=f"User with ID {channelId} not found"
-            ) from e
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching user data",
-                "channelId": channelId,
-            },
-        ) from e
+    return {"message": "OK", "query": channelId, "result": results}
 
 
 @router.get("/user_playlists/{channelId}")
+@handle_browse_errors
 async def get_user_playlists(channelId: str):
-    try:
-        ytmusic = YTMusic()
-        channel = ytmusic.get_user(channelId)
+    ytmusic = YTMusicClient.get_client()
+    channel = ytmusic.get_user(channelId)
 
-        if not channel:
-            raise HTTPException(status_code=404, detail="User not found")
+    if not channel:
+        raise HTTPException(status_code=404, detail="User not found")
 
-        # Check if videos section exists and has params
-        if "videos" not in channel or not channel["videos"] or "params" not in channel["videos"]:
-            raise HTTPException(status_code=404, detail="User playlists not available")
+    if "videos" not in channel or not channel["videos"] or "params" not in channel["videos"]:
+        raise HTTPException(status_code=404, detail="User playlists not available")
 
-        params = channel["videos"]["params"]
-        results = ytmusic.get_user_playlists(channelId, params)
+    params = channel["videos"]["params"]
+    results = ytmusic.get_user_playlists(channelId, params)
 
-        return {"message": "OK", "query": channelId, "result": results}
-
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions as they are
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_user_playlists for {channelId}: {str(e)}")
-
-        if "videos" in str(e) or "params" in str(e):
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "Playlists not available",
-                    "message": "This user doesn't have accessible playlists or the structure has changed",
-                    "channelId": channelId,
-                },
-            )
-
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, user playlists temporarily unavailable",
-                "channelId": channelId,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_user_playlists for {channelId}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching user playlists",
-                "channelId": channelId,
-            },
-        )
+    return {"message": "OK", "query": channelId, "result": results}
 
 
 @router.get("/user_videos/{channelId}")
+@handle_browse_errors
 async def get_user_videos(channelId: str):
-    try:
-        ytmusic = YTMusic()
-        channel = ytmusic.get_user(channelId)
+    ytmusic = YTMusicClient.get_client()
+    channel = ytmusic.get_user(channelId)
 
-        if not channel:
-            raise HTTPException(status_code=404, detail="User not found")
+    if not channel:
+        raise HTTPException(status_code=404, detail="User not found")
 
-        # Check if videos section exists and has params
-        if "videos" not in channel or not channel["videos"] or "params" not in channel["videos"]:
-            raise HTTPException(status_code=404, detail="User videos not available")
+    if "videos" not in channel or not channel["videos"] or "params" not in channel["videos"]:
+        raise HTTPException(status_code=404, detail="User videos not available")
 
-        params = channel["videos"]["params"]
-        results = ytmusic.get_user_videos(channelId, params)
+    params = channel["videos"]["params"]
+    results = ytmusic.get_user_videos(channelId, params)
 
-        return {"message": "OK", "query": channelId, "result": results}
-
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions as they are
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_user_videos for {channelId}: {str(e)}")
-
-        if "videos" in str(e) or "params" in str(e):
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "Videos not available",
-                    "message": "This user doesn't have accessible videos or the structure has changed",
-                    "channelId": channelId,
-                },
-            )
-
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, user videos temporarily unavailable",
-                "channelId": channelId,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_user_videos for {channelId}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching user videos",
-                "channelId": channelId,
-            },
-        )
+    return {"message": "OK", "query": channelId, "result": results}
 
 
 @router.get("/song/{videoId}")
+@handle_browse_errors
 async def get_song(videoId: str, signatureTimestamp: int | None = None):
-    try:
-        ytmusic = YTMusic()
-        results = ytmusic.get_song(videoId, signatureTimestamp)
+    ytmusic = YTMusicClient.get_client()
+    results = ytmusic.get_song(videoId, signatureTimestamp)
 
-        if not results:
-            raise HTTPException(status_code=404, detail="Song not found")
+    if not results:
+        raise HTTPException(status_code=404, detail="Song not found")
 
-        return {"message": "OK", "query": videoId, "result": results}
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_song for {videoId}: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, song data temporarily unavailable",
-                "videoId": videoId,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_song for {videoId}: {str(e)}")
-        if "not found" in str(e).lower() or "unavailable" in str(e).lower():
-            raise HTTPException(
-                status_code=404, detail=f"Song with ID {videoId} not found or unavailable"
-            )
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching song data",
-                "videoId": videoId,
-            },
-        )
+    return {"message": "OK", "query": videoId, "result": results}
 
 
 @router.get("/related/{browseId}")
+@handle_browse_errors
 async def get_related_by_browse_id(browseId: str):
-    try:
-        ytmusic = YTMusic()
-        results = ytmusic.get_song_related(browseId)
+    ytmusic = YTMusicClient.get_client()
+    results = ytmusic.get_song_related(browseId)
 
-        if not results:
-            raise HTTPException(status_code=404, detail="No related content found")
+    if not results:
+        raise HTTPException(status_code=404, detail="No related content found")
 
-        return {"message": "OK", "query": browseId, "result": results}
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_related_by_browse_id for {browseId}: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, related content temporarily unavailable",
-                "browseId": browseId,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_related_by_browse_id for {browseId}: {str(e)}")
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail=f"Related content for {browseId} not found")
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching related content",
-                "browseId": browseId,
-            },
-        )
+    return {"message": "OK", "query": browseId, "result": results}
 
 
 @router.get("/song_related/{songId}")
+@handle_browse_errors
 async def get_song_related_by_song_id(songId: str):
-    try:
-        ytmusic = YTMusic()
-        
-        # Try direct approach first (works for some song IDs)
-        related_content = None
-        related_browse_id = None
-        
-        try:
-            related_content = ytmusic.get_song_related(songId)
-            related_browse_id = songId
-            logger.info("Direct get_song_related worked for %s", songId)
-        except Exception as direct_error:
-            logger.info("Direct approach failed for %s, trying watch playlist: %s", songId, str(direct_error))
-            
-            # Fallback: Get watch playlist and extract related browse ID
-            try:
-                watch_playlist = ytmusic.get_watch_playlist(songId)
-                
-                if not watch_playlist or 'related' not in watch_playlist:
-                    raise HTTPException(
-                        status_code=404,
-                        detail={
-                            "error": "No related content available", 
-                            "message": "This song doesn't have related content available",
-                            "songId": songId
-                        }
-                    )
-                
-                related_browse_id = watch_playlist['related']
-                related_content = ytmusic.get_song_related(related_browse_id)
-                logger.info("Watch playlist approach worked for %s, browse ID: %s", songId, related_browse_id)
-                
-            except Exception as watch_error:
-                logger.error("Both approaches failed for %s: direct=%s, watch=%s", songId, str(direct_error), str(watch_error))
-                raise watch_error
+    ytmusic = YTMusicClient.get_client()
 
-        if not related_content:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "No related content available",
-                    "message": "No related songs found for this song ID",
-                    "songId": songId
-                }
+    # Try direct approach first (works for some song IDs)
+    related_content = None
+    related_browse_id = None
+
+    try:
+        related_content = ytmusic.get_song_related(songId)
+        related_browse_id = songId
+        logger.info("Direct get_song_related worked for %s", songId)
+    except Exception as direct_error:
+        logger.info(
+            "Direct approach failed for %s, trying watch playlist: %s", songId, direct_error
+        )
+
+        # Fallback: Get watch playlist and extract related browse ID
+        try:
+            watch_playlist = ytmusic.get_watch_playlist(songId)
+
+            if not watch_playlist or "related" not in watch_playlist:
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "error": "No related content available",
+                        "message": "This song doesn't have related content available",
+                        "songId": songId,
+                    },
+                ) from direct_error
+
+            raw_related = watch_playlist.get("related")
+            if not isinstance(raw_related, str):
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "error": "No related content available",
+                        "message": "This song doesn't have related content available",
+                        "songId": songId,
+                    },
+                ) from direct_error
+
+            related_browse_id = raw_related
+            related_content = ytmusic.get_song_related(related_browse_id)
+            logger.info(
+                "Watch playlist approach worked for %s, browse ID: %s", songId, related_browse_id
             )
 
-        # Also try to get basic song info for additional context
-        song_info = None
-        try:
-            song_info = ytmusic.get_song(songId)
-        except Exception:
-            # If song info fails, continue with just related content
-            pass
+        except Exception as watch_error:
+            logger.error(
+                "Both approaches failed for %s: direct=%s, watch=%s",
+                songId,
+                direct_error,
+                watch_error,
+            )
 
-        return {
-            "message": "OK",
-            "songId": songId,
-            "related_browse_id": related_browse_id,
-            "related_content": related_content,
-            "song_info": song_info,
-            "total_related": len(related_content) if isinstance(related_content, list) else 0
-        }
+            # Catch known bad request / invalid argument to raise a proper 400 bad request error
+            error_msg = str(watch_error).lower()
+            if "400" in error_msg and (
+                "bad request" in error_msg or "invalid argument" in error_msg
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "Invalid song ID",
+                        "message": (
+                            f"Song ID '{songId}' is not valid or cannot "
+                            "be used to fetch related content"
+                        ),
+                        "songId": songId,
+                        "recommendation": (
+                            "Verify the song ID is correct and the song is publicly available"
+                        ),
+                    },
+                ) from watch_error
+            # Otherwise re-raise to let the decorator handle
+            raise watch_error
 
-    except HTTPException:
-        raise  # Re-raise HTTP exceptions as they are
-
-    except KeyError as e:
-        logger.error("KeyError in get_song_related_by_song_id for %s: %s", songId, str(e))
-
-        if "header" in str(e).lower():
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "error": "API structure error",
-                    "message": "YouTube Music API structure has changed, song related content temporarily unavailable",
-                    "songId": songId,
-                    "technical_details": str(e),
-                },
-            ) from e
-
+    if not related_content:
         raise HTTPException(
             status_code=404,
             detail={
-                "error": "Related content not available",
-                "message": "Related content structure has changed or is not available for this song",
+                "error": "No related content available",
+                "message": "No related songs found for this song ID",
                 "songId": songId,
             },
-        ) from e
+        )
 
-    except Exception as e:
-        logger.error("Unexpected error in get_song_related_by_song_id for %s: %s", songId, str(e))
-        
-        error_msg = str(e).lower()
-        
-        if "400" in error_msg and ("bad request" in error_msg or "invalid argument" in error_msg):
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "Invalid song ID",
-                    "message": f"Song ID '{songId}' is not valid or cannot be used to fetch related content",
-                    "songId": songId,
-                    "recommendation": "Verify the song ID is correct and the song is publicly available"
-                }
-            ) from e
-        
-        if "not found" in error_msg or "unavailable" in error_msg:
-            raise HTTPException(
-                status_code=404, 
-                detail={
-                    "error": "Song not found",
-                    "message": f"Song with ID {songId} not found or unavailable",
-                    "songId": songId
-                }
-            ) from e
-        
-        if "private" in error_msg or "access" in error_msg or "401" in error_msg:
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "error": "Access denied",
-                    "message": "This song may be private or region-restricted",
-                    "songId": songId
-                }
-            ) from e
+    # Also try to get basic song info for additional context
+    song_info = None
+    try:
+        song_info = ytmusic.get_song(songId)
+    except Exception:
+        # If song info fails, continue with just related content
+        pass
 
-        # Check for server errors from YouTube Music
-        if "server returned http" in error_msg:
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "error": "YouTube Music API error",
-                    "message": "YouTube Music service is experiencing issues",
-                    "songId": songId,
-                    "technical_details": str(e)
-                }
-            ) from e
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching song related content",
-                "songId": songId,
-                "technical_details": str(e)
-            },
-        ) from e
+    return {
+        "message": "OK",
+        "songId": songId,
+        "related_browse_id": related_browse_id,
+        "related_content": related_content,
+        "song_info": song_info,
+        "total_related": len(related_content) if isinstance(related_content, list) else 0,
+    }
 
 
 @router.get("/lyrics/{browseId}")
+@handle_browse_errors
 async def get_lyrics(browseId: str, timestamps: bool | None = False):
-    try:
-        ytmusic = YTMusic()
-        results = ytmusic.get_lyrics(browseId, timestamps)
+    ytmusic = YTMusicClient.get_client()
+    if timestamps:
+        results = ytmusic.get_lyrics(browseId, True)
+    else:
+        results = ytmusic.get_lyrics(browseId)
 
-        if not results:
-            raise HTTPException(status_code=404, detail="Lyrics not found")
+    if not results:
+        raise HTTPException(status_code=404, detail="Lyrics not found")
 
-        return {"message": "OK", "query": browseId, "result": results}
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_lyrics for {browseId}: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, lyrics temporarily unavailable",
-                "browseId": browseId,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_lyrics for {browseId}: {str(e)}")
-        if "not found" in str(e).lower() or "no lyrics" in str(e).lower():
-            raise HTTPException(status_code=404, detail=f"Lyrics for {browseId} not found")
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching lyrics",
-                "browseId": browseId,
-            },
-        )
+    return {"message": "OK", "query": browseId, "result": results}
 
 
 @router.get("/tasteprofile")
+@handle_browse_errors
 async def get_tasteprofile():
-    try:
-        ytmusic = YTMusic()
-        results = ytmusic.get_tasteprofile()
+    ytmusic = YTMusicClient.get_client()
+    results = ytmusic.get_tasteprofile()
 
-        return {"message": "OK", "result": results}
-
-    except KeyError as e:
-        logger.error(f"KeyError in get_tasteprofile: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, taste profile temporarily unavailable",
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in get_tasteprofile: {str(e)}")
-        if "auth" in str(e).lower() or "login" in str(e).lower():
-            raise HTTPException(
-                status_code=401, detail="Authentication required to access taste profile"
-            )
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while fetching taste profile",
-            },
-        )
+    return {"message": "OK", "result": results}
 
 
 @router.post("/tasteprofile")
+@handle_browse_errors
 async def set_tasteprofile(artists: list[str], taste_profile: dict | None = None):
-    try:
-        ytmusic = YTMusic()
-        ytmusic.set_tasteprofile(artists, taste_profile)
+    ytmusic = YTMusicClient.get_client()
+    ytmusic.set_tasteprofile(artists, taste_profile)
 
-        return {"message": "OK", "query": artists}
-
-    except KeyError as e:
-        logger.error(f"KeyError in set_tasteprofile: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "API structure error",
-                "message": "YouTube Music API structure has changed, cannot set taste profile",
-                "artists": artists,
-                "technical_details": str(e),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Unexpected error in set_tasteprofile: {str(e)}")
-        if "auth" in str(e).lower() or "login" in str(e).lower():
-            raise HTTPException(
-                status_code=401, detail="Authentication required to set taste profile"
-            )
-        elif "invalid" in str(e).lower():
-            raise HTTPException(status_code=400, detail=f"Invalid input data: {str(e)}")
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "Internal server error",
-                "message": "An unexpected error occurred while setting taste profile",
-                "artists": artists,
-            },
-        )
+    return {"message": "OK", "query": artists}

@@ -33,8 +33,12 @@ theme:
 nav:
   - Home: index.md
   - API Reference: api.md
-  - Error Handling Guide: error-handling.md
-  - Implementation Guide: implementation.md
+  - Guides:
+    - Error Handling: error-handling.md
+    - Error Handling Guide: error-handling-guide.md
+    - Error Logging Improvements: error-logging-improvements.md
+    - Logging Guide: logging-guide.md
+    - Implementation Summary: implementation-summary.md
   - Troubleshooting: troubleshooting.md
 
 markdown_extensions:

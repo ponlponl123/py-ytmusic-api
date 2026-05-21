@@ -1,8 +1,17 @@
-fastapi===0.115.8
-uvicorn===0.34.0
-ytmusicapi===1.11.1
-fastapi[standard]
-uvicorn[standard]
+# Runtime dependencies — keep in sync with pyproject.toml [project.dependencies]
+fastapi>=0.136.1
+uvicorn[standard]>=0.34.0
+ytmusicapi>=1.12.0
+httpx>=0.28.1
+requests>=2.34.2
+
+# Dev / test dependencies (install with: pip install -e ".[dev]")
+# pytest>=9.0.3
+# anyio[trio]>=4.13.0
+# pytest-anyio
+# black>=24.0.0
+# isort>=5.13.0
+# pylint>=4.0.5
 
 # Documentation dependencies
 mkdocs>=1.5.0

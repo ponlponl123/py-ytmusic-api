@@ -1,0 +1,21 @@
+{
+  "pythonVersion": "3.10",
+  "pythonPlatform": "Windows",
+  "venvPath": ".",
+  "executionEnvironments": [
+    {
+      "root": "."
+    }
+  ],
+  "include": [
+    "src",
+    "tests",
+    "scripts"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.git"
+  ],
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none"
+}
