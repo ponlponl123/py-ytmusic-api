@@ -38,7 +38,7 @@ jobs:
 
       - name: Generate OpenAPI Documentation
         run: |
-          python generate_docs.py
+          python scripts/generate_docs.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

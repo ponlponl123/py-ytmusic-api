@@ -32,13 +32,13 @@ try:
     with open(output_path, "w", encoding="utf-8") as fh:
         json.dump(openapi_schema, fh, indent=2)
 
-    print(f"✅ OpenAPI documentation generated: {output_path}")
+    print(f"[OK] OpenAPI documentation generated: {output_path}")
 
 except ImportError as exc:
-    print(f"❌ Error importing FastAPI app: {exc}")
+    print(f"[Error] Error importing FastAPI app: {exc}")
     print("Make sure you're in the project root directory and dependencies are installed.")
     sys.exit(1)
 
 except Exception as exc:  # pylint: disable=broad-exception-caught
-    print(f"❌ Error generating OpenAPI documentation: {exc}")
+    print(f"[Error] Error generating OpenAPI documentation: {exc}")
     sys.exit(1)
