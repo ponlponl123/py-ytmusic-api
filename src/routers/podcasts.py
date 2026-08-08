@@ -1,8 +1,11 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+import logging
 
-from src.utils.client import YTMusicClient
+from fastapi import APIRouter, Depends, HTTPException
+from ytmusicapi import YTMusic
+
+from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_browse_errors
 
 router = APIRouter()
@@ -11,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 @router.get("/channel/{channelId}")
 @handle_browse_errors
-async def get_channel(channelId: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_channel(
+    channelId: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_channel(channelId)
 
     if not results:
@@ -23,8 +27,9 @@ async def get_channel(channelId: str):
 
 @router.get("/channel_episodes/{channelId}")
 @handle_browse_errors
-async def get_channel_episodes(channelId: str, params: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_channel_episodes(
+    channelId: str, params: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_channel_episodes(channelId, params)
 
     if not results:
@@ -35,8 +40,11 @@ async def get_channel_episodes(channelId: str, params: str):
 
 @router.get("/podcast/{playlistId}")
 @handle_browse_errors
-async def get_podcast(playlistId: str, limit: int | None = 100):
-    ytmusic = YTMusicClient.get_client()
+async def get_podcast(
+    playlistId: str,
+    limit: int | None = 100,
+    ytmusic: YTMusic = Depends(get_ytmusic),
+):
     results = ytmusic.get_podcast(playlistId, limit)
 
     if not results:
@@ -47,8 +55,9 @@ async def get_podcast(playlistId: str, limit: int | None = 100):
 
 @router.get("/episode/{videoId}")
 @handle_browse_errors
-async def get_episode(videoId: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_episode(
+    videoId: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_episode(videoId)
 
     if not results:
@@ -59,11 +68,13 @@ async def get_episode(videoId: str):
 
 @router.get("/episodes_playlist/{playlist_id}")
 @handle_browse_errors
-async def get_episodes_playlist(playlist_id: str = "RDPN"):
-    ytmusic = YTMusicClient.get_client()
+async def get_episodes_playlist(
+    playlist_id: str = "RDPN", ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_episodes_playlist(playlist_id)
 
     if not results:
         raise HTTPException(status_code=404, detail="Episodes playlist not found")
 
     return {"message": "OK", "query": playlist_id, "result": results}
+

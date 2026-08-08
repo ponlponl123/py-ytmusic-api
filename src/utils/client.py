@@ -3,12 +3,18 @@ Centralized YTMusic client manager to share a single client instance
 and session across all API endpoints, improving performance via HTTP connection pooling.
 """
 
+import hashlib
+import json
 import logging
 from typing import Any
 
+from fastapi import Request
 import ytmusicapi.mixins.playlists
 import ytmusicapi.parsers.playlists
-from ytmusicapi import YTMusic
+from ytmusicapi import YTMusic, setup
+from ytmusicapi.helpers import initialize_headers
+
+
 from ytmusicapi.continuations import get_continuations_2025
 from ytmusicapi.helpers import sum_total_duration
 from ytmusicapi.navigation import (
@@ -95,25 +101,116 @@ logger.info("Successfully applied monkeypatch to ytmusicapi.parse_audio_playlist
 
 class YTMusicClient:
     _instance = None
+    _cookie_clients: dict[str, YTMusic] = {}
+    _max_cache_size: int = 200
 
     @classmethod
-    def get_client(cls) -> YTMusic:
+    def get_client(cls, cookie_or_auth: str | dict | None = None) -> YTMusic:
         """
-        Gets the singleton YTMusic client instance. Lazily initializes it.
+        Gets a YTMusic client instance. If a cookie or auth dictionary/string is provided,
+        initializes or retrieves a cached YTMusic instance for that specific user.
+        Otherwise returns the default shared unauthenticated client.
         """
-        if cls._instance is None:
-            logger.info("Initializing global YTMusic client instance")
+        if not cookie_or_auth:
+            if cls._instance is None:
+                logger.info("Initializing global YTMusic client instance")
+                try:
+                    cls._instance = YTMusic()
+                except Exception as e:
+                    logger.error("Failed to initialize global YTMusic client: %s", e)
+                    cls._instance = YTMusic()
+            return cls._instance
+
+        # Normalize and hash auth key for caching
+        auth_key_str = str(cookie_or_auth) if isinstance(cookie_or_auth, dict) else cookie_or_auth.strip()
+        auth_hash = hashlib.sha256(auth_key_str.encode("utf-8")).hexdigest()
+
+        if auth_hash in cls._cookie_clients:
+            return cls._cookie_clients[auth_hash]
+
+        logger.info("Initializing user-specific YTMusic client (hash: %s...)", auth_hash[:8])
+        try:
+            client_instance = cls._build_user_client(cookie_or_auth)
+            # Evict oldest entry if cache exceeds maximum size
+            if len(cls._cookie_clients) >= cls._max_cache_size:
+                oldest_key = next(iter(cls._cookie_clients))
+                del cls._cookie_clients[oldest_key]
+            cls._cookie_clients[auth_hash] = client_instance
+            return client_instance
+        except Exception as e:
+            logger.warning(
+                "Failed to initialize custom YTMusic client (%s). Falling back to default client.",
+                e,
+            )
+            return cls.get_client(None)
+
+    @classmethod
+    def _build_user_client(cls, cookie_or_auth: str | dict) -> YTMusic:
+        """Helper to build a YTMusic client from a cookie string or auth dict/JSON."""
+        if isinstance(cookie_or_auth, dict):
+            return YTMusic(auth=cookie_or_auth)
+
+        auth_str = cookie_or_auth.strip()
+
+        # Case 1: JSON format string
+        if auth_str.startswith("{"):
             try:
-                cls._instance = YTMusic()
-            except Exception as e:
-                logger.error("Failed to initialize global YTMusic client: %s", e)
-                # Fallback to simple instantiation if anything goes wrong
-                cls._instance = YTMusic()
-        return cls._instance
+                auth_dict = json.loads(auth_str)
+                return YTMusic(auth=auth_dict)
+            except Exception:
+                pass
+
+        # Case 2: Raw browser header string (contains colons and newlines)
+        if "\n" in auth_str and ":" in auth_str:
+            try:
+                parsed_json_str = setup(headers_raw=auth_str)
+                return YTMusic(auth=parsed_json_str)
+            except Exception:
+                pass
+
+        # Case 3: Standard cookie string (e.g., SAPISID=... or VISITOR_INFO1_LIVE=...)
+        headers = initialize_headers()
+        headers["cookie"] = auth_str
+        headers["x-goog-authuser"] = "0"
+        return YTMusic(auth=headers)
+
+    @classmethod
+    def get_client_from_request(cls, request: Request) -> YTMusic:
+        """
+        Extracts user cookie/auth from incoming FastAPI Request and returns the appropriate client.
+        Checks:
+        1. x-ytmusic-cookie header
+        2. cookie header / request cookies
+        3. authorization header
+        4. cookie query parameter
+        """
+        cookie_candidate: str | None = None
+
+        # 1. Custom x-ytmusic-cookie header
+        if "x-ytmusic-cookie" in request.headers:
+            cookie_candidate = request.headers["x-ytmusic-cookie"]
+        # 2. Standard Cookie header
+        elif "cookie" in request.headers:
+            cookie_candidate = request.headers["cookie"]
+        # 3. Authorization header
+        elif "authorization" in request.headers:
+            cookie_candidate = request.headers["authorization"]
+        # 4. Query parameter
+        elif "cookie" in request.query_params:
+            cookie_candidate = request.query_params["cookie"]
+
+        return cls.get_client(cookie_candidate)
 
     @classmethod
     def reset_client(cls) -> None:
         """
-        Resets the client instance (useful for testing or re-initialization).
+        Resets all client instances (useful for testing or re-initialization).
         """
         cls._instance = None
+        cls._cookie_clients.clear()
+
+
+def get_ytmusic(request: Request) -> YTMusic:
+    """FastAPI dependency for injecting per-user YTMusic client."""
+    return YTMusicClient.get_client_from_request(request)
+

@@ -1,8 +1,9 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from ytmusicapi import YTMusic
 
-from src.utils.client import YTMusicClient
+from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_playlist_errors
 
 router = APIRouter()
@@ -12,9 +13,12 @@ logger = logging.getLogger(__name__)
 @router.get("/{playlistId}")
 @handle_playlist_errors
 def get_playlist(
-    playlistId: str, limit: int | None = 100, related: bool = False, suggestions_limit: int = 0
+    playlistId: str,
+    limit: int | None = 100,
+    related: bool = False,
+    suggestions_limit: int = 0,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.get_playlist(
         playlistId, limit=limit, related=related, suggestions_limit=suggestions_limit
     )
@@ -33,6 +37,7 @@ async def create_playlist(
     privacy_status: str = "PRIVATE",
     video_ids: list | None = None,
     source_playlist: str | None = None,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
     # Validate privacy status
     valid_privacy = ["PRIVATE", "PUBLIC", "UNLISTED"]
@@ -48,7 +53,6 @@ async def create_playlist(
     if not title.strip():
         raise HTTPException(status_code=400, detail="Playlist title cannot be empty")
 
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.create_playlist(
         title,
         description,
@@ -76,6 +80,7 @@ async def edit_playlist(
     moveItem: str | tuple[str, str] | None = None,
     addPlaylistId: str | None = None,
     addToTop: bool | None = None,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
     # Validate privacy status if provided
     if privacyStatus:
@@ -99,7 +104,6 @@ async def edit_playlist(
             ),
         )
 
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.edit_playlist(
         playlistId,
         title=title,
@@ -115,8 +119,9 @@ async def edit_playlist(
 
 @router.delete("/{playlistId}")
 @handle_playlist_errors
-async def delete_playlist(playlistId: str):
-    ytmusic = YTMusicClient.get_client()
+async def delete_playlist(
+    playlistId: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.delete_playlist(playlistId)
 
     return {"message": "OK", "playlistId": playlistId, "result": results}
@@ -129,6 +134,7 @@ async def add_playlist_items(
     videoIds: list[str] | None = None,
     source_playlist: str | None = None,
     duplicates: bool = False,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
     # Validate input
     if not videoIds and not source_playlist:
@@ -139,7 +145,6 @@ async def add_playlist_items(
     if videoIds is not None and not videoIds:
         raise HTTPException(status_code=400, detail="videoIds cannot be empty if provided")
 
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.add_playlist_items(
         playlistId, videoIds=videoIds, source_playlist=source_playlist, duplicates=duplicates
     )
@@ -155,13 +160,16 @@ async def add_playlist_items(
 
 @router.delete("/items/{playlistId}")
 @handle_playlist_errors
-async def remove_playlist_items(playlistId: str, videos: list[dict]):
+async def remove_playlist_items(
+    playlistId: str,
+    videos: list[dict],
+    ytmusic: YTMusic = Depends(get_ytmusic),
+):
     if not videos:
         raise HTTPException(
             status_code=400, detail="At least one video must be provided for removal"
         )
 
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.remove_playlist_items(playlistId, videos)
 
     return {
@@ -170,3 +178,4 @@ async def remove_playlist_items(playlistId: str, videos: list[dict]):
         "videos_count": len(videos),
         "result": results,
     }
+

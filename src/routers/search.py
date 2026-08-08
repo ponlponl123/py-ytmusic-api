@@ -1,9 +1,13 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+import logging
+from typing import Any
 
-from src.utils.client import YTMusicClient
+from fastapi import APIRouter, Depends, HTTPException, Query
+from ytmusicapi import YTMusic
+
+from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_search_errors
 
 router = APIRouter()
@@ -11,10 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
-async def health_check():
+async def health_check(ytmusic: YTMusic = Depends(get_ytmusic)):
     """Health check endpoint to test basic YTMusic API functionality"""
     try:
-        ytmusic = YTMusicClient.get_client()
         # Try a simple search to test API connectivity
         test_results = ytmusic.search("test", limit=1)
 
@@ -86,8 +89,8 @@ async def search(
     limit: int = 20,
     scope: str | None = None,
     enrich_categories: bool = True,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    ytmusic = YTMusicClient.get_client()
     try:
         search_results = ytmusic.search(
             query=query, filter=filter, ignore_spelling=ignore_spelling, limit=limit, scope=scope
@@ -124,9 +127,10 @@ async def search(
 @router.get("/suggestions")
 @handle_search_errors
 async def get_suggestions(
-    query: str = Query(..., description="Search query"), detailed_runs: bool = False
+    query: str = Query(..., description="Search query"),
+    detailed_runs: bool = False,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    ytmusic = YTMusicClient.get_client()
     try:
         search_results = ytmusic.get_search_suggestions(query=query, detailed_runs=detailed_runs)
     except KeyError as e:
@@ -155,7 +159,11 @@ async def get_suggestions(
 
 @router.delete("/suggestions")
 @handle_search_errors
-async def remove_suggestions(suggestions: list[dict[str, Any]], indices: list[int] | None = None):
-    ytmusic = YTMusicClient.get_client()
+async def remove_suggestions(
+    suggestions: list[dict[str, Any]],
+    indices: list[int] | None = None,
+    ytmusic: YTMusic = Depends(get_ytmusic),
+):
     results = ytmusic.remove_search_suggestions(suggestions=suggestions, indices=indices)
     return {"message": "OK", "query": suggestions, "result": results}
+

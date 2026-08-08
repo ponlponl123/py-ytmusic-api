@@ -1,9 +1,13 @@
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+import logging
+from typing import Literal
 
-from src.utils.client import YTMusicClient
+from fastapi import APIRouter, Depends, HTTPException
+from ytmusicapi import YTMusic
+
+from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_upload_errors
 
 router = APIRouter()
@@ -13,9 +17,10 @@ logger = logging.getLogger(__name__)
 @router.get("/library_upload_songs")
 @handle_upload_errors
 async def get_library_upload_songs(
-    limit: int | None = 25, order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
+    limit: int | None = 25,
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.get_library_upload_songs(limit, order=order)
 
     return {"message": "OK", "result": results}
@@ -24,9 +29,10 @@ async def get_library_upload_songs(
 @router.get("/library_upload_artists")
 @handle_upload_errors
 async def get_library_upload_artists(
-    limit: int | None = 25, order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
+    limit: int | None = 25,
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.get_library_upload_artists(limit, order=order)
 
     return {"message": "OK", "result": results}
@@ -35,9 +41,10 @@ async def get_library_upload_artists(
 @router.get("/library_upload_albums")
 @handle_upload_errors
 async def get_library_upload_albums(
-    limit: int | None = 25, order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None
+    limit: int | None = 25,
+    order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.get_library_upload_albums(limit, order=order)
 
     return {"message": "OK", "result": results}
@@ -45,8 +52,9 @@ async def get_library_upload_albums(
 
 @router.get("/library_upload_artist/{browseId}")
 @handle_upload_errors
-async def get_library_upload_artist(browseId: str, limit: int = 25):
-    ytmusic = YTMusicClient.get_client()
+async def get_library_upload_artist(
+    browseId: str, limit: int = 25, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_library_upload_artist(browseId, limit)
 
     if not results:
@@ -57,8 +65,9 @@ async def get_library_upload_artist(browseId: str, limit: int = 25):
 
 @router.get("/library_upload_album/{browseId}")
 @handle_upload_errors
-async def get_library_upload_album(browseId: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_library_upload_album(
+    browseId: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_library_upload_album(browseId)
 
     if not results:
@@ -69,7 +78,9 @@ async def get_library_upload_album(browseId: str):
 
 @router.post("/upload_song/{filepath}")
 @handle_upload_errors
-async def upload_song(filepath: str):
+async def upload_song(
+    filepath: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     # Basic validation
     if not filepath.strip():
         raise HTTPException(status_code=400, detail="Filepath cannot be empty")
@@ -82,7 +93,6 @@ async def upload_song(filepath: str):
             detail=f"Invalid file extension. Supported formats: {', '.join(valid_extensions)}",
         )
 
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.upload_song(filepath)
 
     return {"message": "OK", "filepath": filepath, "result": results}
@@ -90,11 +100,13 @@ async def upload_song(filepath: str):
 
 @router.delete("/upload_entity/{entityId}")
 @handle_upload_errors
-async def delete_upload_entity(entityId: str):
+async def delete_upload_entity(
+    entityId: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     if not entityId.strip():
         raise HTTPException(status_code=400, detail="Entity ID cannot be empty")
 
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.delete_upload_entity(entityId)
 
     return {"message": "OK", "entityId": entityId, "result": results}
+

@@ -1,8 +1,11 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+import logging
 
-from src.utils.client import YTMusicClient
+from fastapi import APIRouter, Depends, HTTPException
+from ytmusicapi import YTMusic
+
+from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_browse_errors
 
 router = APIRouter()
@@ -11,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("/mood_categories")
 @handle_browse_errors
-def get_mood_categories():
-    ytmusic = YTMusicClient.get_client()
+def get_mood_categories(ytmusic: YTMusic = Depends(get_ytmusic)):
     results = ytmusic.get_mood_categories()
     return {"message": "OK", "result": results}
 
@@ -25,6 +27,7 @@ async def get_watch_playlist(
     limit: int = 25,
     radio: bool = False,
     shuffle: bool = False,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
     # Validate limit
     if limit < 1:
@@ -32,7 +35,6 @@ async def get_watch_playlist(
     if limit > 100:
         raise HTTPException(status_code=400, detail="Limit cannot exceed 100")
 
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.get_watch_playlist(
         videoId=videoId, playlistId=playlistId, limit=limit, radio=radio, shuffle=shuffle
     )
@@ -41,3 +43,4 @@ async def get_watch_playlist(
         raise HTTPException(status_code=404, detail="Video not found")
 
     return {"message": "OK", "videoId": videoId, "playlistId": playlistId, "result": results}
+

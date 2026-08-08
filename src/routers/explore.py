@@ -1,8 +1,11 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+import logging
 
-from src.utils.client import YTMusicClient
+from fastapi import APIRouter, Depends, HTTPException
+from ytmusicapi import YTMusic
+
+from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_browse_errors
 
 router = APIRouter()
@@ -11,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 @router.get("/mood_playlists/{query}")
 @handle_browse_errors
-async def get_mood_playlists(query: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_mood_playlists(
+    query: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_mood_playlists(query)
 
     if not results:
@@ -23,11 +27,13 @@ async def get_mood_playlists(query: str):
 
 @router.get("/charts/{country}")
 @handle_browse_errors
-async def get_charts(country: str = "ZZ"):
-    ytmusic = YTMusicClient.get_client()
+async def get_charts(
+    country: str = "ZZ", ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_charts(country)
 
     if not results:
         raise HTTPException(status_code=404, detail=f"No charts found for country: {country}")
 
     return {"message": "OK", "query": country, "result": results}
+

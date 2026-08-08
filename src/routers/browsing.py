@@ -1,9 +1,10 @@
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from ytmusicapi import YTMusic
 
-from src.utils.client import YTMusicClient
+from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_browse_errors
 
 router = APIRouter()
@@ -12,8 +13,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("/home")
 @handle_browse_errors
-async def get_home(limit: int = 3):
-    ytmusic = YTMusicClient.get_client()
+async def get_home(limit: int = 3, ytmusic: YTMusic = Depends(get_ytmusic)):
     search_results = ytmusic.get_home(limit)
 
     if not search_results:
@@ -24,7 +24,7 @@ async def get_home(limit: int = 3):
 
 @router.get("/artist/{channelId}")
 @handle_browse_errors
-async def get_artist(channelId: str):
+async def get_artist(channelId: str, ytmusic: YTMusic = Depends(get_ytmusic)):
     # Perform ID validation first to prevent unnecessary requests or handle errors gracefully
     if channelId.startswith("VL") or channelId.startswith("OLAK") or channelId.startswith("PL"):
         logger.info("Client attempted to use playlist/album ID '%s' on artist endpoint", channelId)
@@ -45,7 +45,6 @@ async def get_artist(channelId: str):
             },
         )
 
-    ytmusic = YTMusicClient.get_client()
     try:
         search_results = ytmusic.get_artist(channelId)
     except KeyError as artist_error:
@@ -116,8 +115,7 @@ async def get_artist(channelId: str):
 
 @router.get("/artist_videos/{channelId}")
 @handle_browse_errors
-async def get_artist_videos(channelId: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_artist_videos(channelId: str, ytmusic: YTMusic = Depends(get_ytmusic)):
     artist_results = ytmusic.get_artist(channelId)
 
     if not artist_results:
@@ -139,8 +137,8 @@ async def get_artist_albums(
     params: str,
     limit: int | None = 100,
     order: Literal["Recency", "Popularity", "Alphabetical order"] | None = None,
+    ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    ytmusic = YTMusicClient.get_client()
     results = ytmusic.get_artist_albums(
         channelId=channelId, params=params, limit=limit, order=order
     )
@@ -153,8 +151,7 @@ async def get_artist_albums(
 
 @router.get("/album/{browseId}")
 @handle_browse_errors
-async def get_album(browseId: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_album(browseId: str, ytmusic: YTMusic = Depends(get_ytmusic)):
     results = ytmusic.get_album(browseId)
 
     if not results:
@@ -165,8 +162,9 @@ async def get_album(browseId: str):
 
 @router.get("/album_browse_id/{audioPlaylistId}")
 @handle_browse_errors
-async def get_album_browse_id(audioPlaylistId: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_album_browse_id(
+    audioPlaylistId: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_album_browse_id(audioPlaylistId)
 
     if not results:
@@ -177,7 +175,7 @@ async def get_album_browse_id(audioPlaylistId: str):
 
 @router.get("/user/{channelId}")
 @handle_browse_errors
-async def get_user(channelId: str):
+async def get_user(channelId: str, ytmusic: YTMusic = Depends(get_ytmusic)):
     # Perform ID validation first
     if channelId.startswith("VL") or channelId.startswith("OLAK") or channelId.startswith("PL"):
         logger.info("Client attempted to use playlist/album ID '%s' on user endpoint", channelId)
@@ -198,7 +196,6 @@ async def get_user(channelId: str):
             },
         )
 
-    ytmusic = YTMusicClient.get_client()
     try:
         results = ytmusic.get_user(channelId)
     except Exception as user_error:
@@ -248,8 +245,7 @@ async def get_user(channelId: str):
 
 @router.get("/user_playlists/{channelId}")
 @handle_browse_errors
-async def get_user_playlists(channelId: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_user_playlists(channelId: str, ytmusic: YTMusic = Depends(get_ytmusic)):
     channel = ytmusic.get_user(channelId)
 
     if not channel:
@@ -266,8 +262,7 @@ async def get_user_playlists(channelId: str):
 
 @router.get("/user_videos/{channelId}")
 @handle_browse_errors
-async def get_user_videos(channelId: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_user_videos(channelId: str, ytmusic: YTMusic = Depends(get_ytmusic)):
     channel = ytmusic.get_user(channelId)
 
     if not channel:
@@ -284,8 +279,11 @@ async def get_user_videos(channelId: str):
 
 @router.get("/song/{videoId}")
 @handle_browse_errors
-async def get_song(videoId: str, signatureTimestamp: int | None = None):
-    ytmusic = YTMusicClient.get_client()
+async def get_song(
+    videoId: str,
+    signatureTimestamp: int | None = None,
+    ytmusic: YTMusic = Depends(get_ytmusic),
+):
     results = ytmusic.get_song(videoId, signatureTimestamp)
 
     if not results:
@@ -296,8 +294,9 @@ async def get_song(videoId: str, signatureTimestamp: int | None = None):
 
 @router.get("/related/{browseId}")
 @handle_browse_errors
-async def get_related_by_browse_id(browseId: str):
-    ytmusic = YTMusicClient.get_client()
+async def get_related_by_browse_id(
+    browseId: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     results = ytmusic.get_song_related(browseId)
 
     if not results:
@@ -308,9 +307,9 @@ async def get_related_by_browse_id(browseId: str):
 
 @router.get("/song_related/{songId}")
 @handle_browse_errors
-async def get_song_related_by_song_id(songId: str):
-    ytmusic = YTMusicClient.get_client()
-
+async def get_song_related_by_song_id(
+    songId: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
     # Try direct approach first (works for some song IDs)
     related_content = None
     related_browse_id = None
@@ -415,8 +414,11 @@ async def get_song_related_by_song_id(songId: str):
 
 @router.get("/lyrics/{browseId}")
 @handle_browse_errors
-async def get_lyrics(browseId: str, timestamps: bool | None = False):
-    ytmusic = YTMusicClient.get_client()
+async def get_lyrics(
+    browseId: str,
+    timestamps: bool | None = False,
+    ytmusic: YTMusic = Depends(get_ytmusic),
+):
     if timestamps:
         results = ytmusic.get_lyrics(browseId, True)
     else:
@@ -430,8 +432,7 @@ async def get_lyrics(browseId: str, timestamps: bool | None = False):
 
 @router.get("/tasteprofile")
 @handle_browse_errors
-async def get_tasteprofile():
-    ytmusic = YTMusicClient.get_client()
+async def get_tasteprofile(ytmusic: YTMusic = Depends(get_ytmusic)):
     results = ytmusic.get_tasteprofile()
 
     return {"message": "OK", "result": results}
@@ -439,8 +440,12 @@ async def get_tasteprofile():
 
 @router.post("/tasteprofile")
 @handle_browse_errors
-async def set_tasteprofile(artists: list[str], taste_profile: dict | None = None):
-    ytmusic = YTMusicClient.get_client()
+async def set_tasteprofile(
+    artists: list[str],
+    taste_profile: dict | None = None,
+    ytmusic: YTMusic = Depends(get_ytmusic),
+):
     ytmusic.set_tasteprofile(artists, taste_profile)
 
     return {"message": "OK", "query": artists}
+
