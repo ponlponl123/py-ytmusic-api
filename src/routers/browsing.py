@@ -286,19 +286,48 @@ async def get_song(
     signatureTimestamp: int | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = await execute_ytmusic_call(ytmusic.get_song, videoId, signatureTimestamp)
+    results = None
+    try:
+        results = await execute_ytmusic_call(ytmusic.get_song, videoId, signatureTimestamp)
+    except Exception as e:
+        logger.warning("ytmusic.get_song failed for %s: %s", videoId, e)
 
     if not results:
-        raise HTTPException(status_code=404, detail="Song not found")
+        results = {}
 
-    if isinstance(results, dict) and "videoDetails" in results:
-        v_details = results["videoDetails"]
-        if isinstance(v_details, dict):
-            channel_id = v_details.get("channelId") or v_details.get("externalChannelId")
-            if channel_id and "artists" not in v_details:
-                v_details["artists"] = [
-                    {"id": channel_id, "name": v_details.get("author", "")}
-                ]
+    v_details = results.get("videoDetails") if isinstance(results, dict) else None
+    if not isinstance(v_details, dict):
+        v_details = {}
+        if isinstance(results, dict):
+            results["videoDetails"] = v_details
+
+    channel_id = (
+        v_details.get("channelId")
+        or v_details.get("externalChannelId")
+        or (v_details.get("artists") and isinstance(v_details["artists"], list) and len(v_details["artists"]) > 0 and v_details["artists"][0].get("id"))
+    )
+
+    # Fallback to get_watch_playlist if channel_id is not in videoDetails
+    if not channel_id:
+        try:
+            watch_data = await execute_ytmusic_call(ytmusic.get_watch_playlist, videoId=videoId, limit=1)
+            if isinstance(watch_data, dict) and watch_data.get("tracks") and len(watch_data["tracks"]) > 0:
+                first_track = watch_data["tracks"][0]
+                artists = first_track.get("artists")
+                if isinstance(artists, list) and len(artists) > 0:
+                    v_details["artists"] = artists
+                    if artists[0].get("id"):
+                        channel_id = artists[0]["id"]
+                        v_details["channelId"] = channel_id
+                        if not v_details.get("author"):
+                            v_details["author"] = artists[0].get("name", "")
+        except Exception as e:
+            logger.warning("get_watch_playlist fallback failed for %s: %s", videoId, e)
+
+    if channel_id and "artists" not in v_details:
+        v_details["artists"] = [
+            {"id": channel_id, "name": v_details.get("author", "")}
+        ]
 
     return {"message": "OK", "query": videoId, "result": results}
 
