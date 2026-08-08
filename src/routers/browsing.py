@@ -286,10 +286,19 @@ async def get_song(
     signatureTimestamp: int | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_song(videoId, signatureTimestamp)
+    results = await execute_ytmusic_call(ytmusic.get_song, videoId, signatureTimestamp)
 
     if not results:
         raise HTTPException(status_code=404, detail="Song not found")
+
+    if isinstance(results, dict) and "videoDetails" in results:
+        v_details = results["videoDetails"]
+        if isinstance(v_details, dict):
+            channel_id = v_details.get("channelId") or v_details.get("externalChannelId")
+            if channel_id and "artists" not in v_details:
+                v_details["artists"] = [
+                    {"id": channel_id, "name": v_details.get("author", "")}
+                ]
 
     return {"message": "OK", "query": videoId, "result": results}
 
