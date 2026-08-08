@@ -41,10 +41,12 @@ def run_command(command: str, description: str) -> None:
 
 def main() -> None:
     """Run all code quality tools over the src/ tree."""
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8")
+    reconfig_stdout = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfig_stdout):
+        reconfig_stdout(encoding="utf-8")
+    reconfig_stderr = getattr(sys.stderr, "reconfigure", None)
+    if callable(reconfig_stderr):
+        reconfig_stderr(encoding="utf-8")
 
     python_exe = sys.executable
 

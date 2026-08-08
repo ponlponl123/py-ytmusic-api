@@ -36,7 +36,9 @@ async def test_docs_endpoint_returns_200():
 
 @pytest.mark.anyio
 async def test_api_status_endpoint_returns_200():
-    """Global API status endpoint should return a structured response with dynamic timestamp and version."""
+    """
+    Global API status endpoint should return a structured response.
+    """
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:

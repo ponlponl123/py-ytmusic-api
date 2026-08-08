@@ -4,6 +4,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from ytmusicapi import YTMusic
 
+from src.utils.cache import execute_ytmusic_call
 from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_library_errors
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 @router.get("/library_playlists")
 @handle_library_errors
 async def get_library_playlists(limit: int | None = 25, ytmusic: YTMusic = Depends(get_ytmusic)):
-    results = ytmusic.get_library_playlists(limit)
+    results = await execute_ytmusic_call(ytmusic.get_library_playlists, limit)
     return {"message": "OK", "result": results}
 
 
@@ -26,7 +27,9 @@ async def get_library_songs(
     order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_library_songs(limit, validate_responses, order)
+    results = await execute_ytmusic_call(
+        ytmusic.get_library_songs, limit, validate_responses, order
+    )
     return {"message": "OK", "result": results}
 
 
@@ -37,7 +40,7 @@ async def get_library_albums(
     order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_library_albums(limit, order)
+    results = await execute_ytmusic_call(ytmusic.get_library_albums, limit, order)
     return {"message": "OK", "result": results}
 
 
@@ -48,7 +51,7 @@ async def get_library_artists(
     order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_library_artists(limit, order)
+    results = await execute_ytmusic_call(ytmusic.get_library_artists, limit, order)
     return {"message": "OK", "result": results}
 
 
@@ -59,7 +62,7 @@ async def get_library_subscriptions(
     order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_library_subscriptions(limit, order)
+    results = await execute_ytmusic_call(ytmusic.get_library_subscriptions, limit, order)
     return {"message": "OK", "result": results}
 
 
@@ -70,7 +73,7 @@ async def get_library_podcasts(
     order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_library_podcasts(limit, order)
+    results = await execute_ytmusic_call(ytmusic.get_library_podcasts, limit, order)
     return {"message": "OK", "result": results}
 
 
@@ -81,47 +84,47 @@ async def get_library_channels(
     order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_library_channels(limit, order)
+    results = await execute_ytmusic_call(ytmusic.get_library_channels, limit, order)
     return {"message": "OK", "result": results}
 
 
 @router.get("/liked_songs")
 @handle_library_errors
 async def get_liked_songs(limit: int = 100, ytmusic: YTMusic = Depends(get_ytmusic)):
-    results = ytmusic.get_liked_songs(limit)
+    results = await execute_ytmusic_call(ytmusic.get_liked_songs, limit)
     return {"message": "OK", "result": results}
 
 
 @router.get("/saved_episodes")
 @handle_library_errors
 async def get_saved_episodes(limit: int = 100, ytmusic: YTMusic = Depends(get_ytmusic)):
-    results = ytmusic.get_saved_episodes(limit)
+    results = await execute_ytmusic_call(ytmusic.get_saved_episodes, limit)
     return {"message": "OK", "result": results}
 
 
 @router.get("/history")
 @handle_library_errors
 async def get_history(ytmusic: YTMusic = Depends(get_ytmusic)):
-    results = ytmusic.get_history()
+    results = await execute_ytmusic_call(ytmusic.get_history)
     return {"message": "OK", "result": results}
 
 
 @router.get("/account_info")
 @handle_library_errors
 async def get_account_info(ytmusic: YTMusic = Depends(get_ytmusic)):
-    results = ytmusic.get_account_info()
+    results = await execute_ytmusic_call(ytmusic.get_account_info)
     return {"message": "OK", "result": results}
 
 
 @router.post("/history/{videoId}")
 @handle_library_errors
 async def add_history_item(videoId: str, ytmusic: YTMusic = Depends(get_ytmusic)):
-    song = ytmusic.get_song(videoId)
+    song = await execute_ytmusic_call(ytmusic.get_song, videoId)
 
     if not song:
         raise HTTPException(status_code=404, detail=f"Song with ID {videoId} not found")
 
-    results = ytmusic.add_history_item(song)
+    results = await execute_ytmusic_call(ytmusic.add_history_item, song)
     return {"message": "OK", "videoId": videoId, "result": results}
 
 
@@ -130,7 +133,7 @@ async def add_history_item(videoId: str, ytmusic: YTMusic = Depends(get_ytmusic)
 async def remove_history_items(
     feedbackTokens: list[str], ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    results = ytmusic.remove_history_items(feedbackTokens)
+    results = await execute_ytmusic_call(ytmusic.remove_history_items, feedbackTokens)
     return {"message": "OK", "feedbackTokens": feedbackTokens, "result": results}
 
 
@@ -146,7 +149,7 @@ async def rate_song(
             detail=f"Invalid rating '{rating}'. Must be one of: {', '.join(valid_ratings)}",
         )
 
-    results = ytmusic.rate_song(videoId, rating)
+    results = await execute_ytmusic_call(ytmusic.rate_song, videoId, rating)
     return {"message": "OK", "videoId": videoId, "rating": rating, "result": results}
 
 
@@ -162,7 +165,7 @@ async def rate_playlist(
             detail=f"Invalid rating '{rating}'. Must be one of: {', '.join(valid_ratings)}",
         )
 
-    results = ytmusic.rate_playlist(playlistId, rating)
+    results = await execute_ytmusic_call(ytmusic.rate_playlist, playlistId, rating)
     return {"message": "OK", "playlistId": playlistId, "rating": rating, "result": results}
 
 
@@ -174,7 +177,7 @@ async def subscribe_artists(
     if not channelIds:
         raise HTTPException(status_code=400, detail="At least one channel ID is required")
 
-    results = ytmusic.subscribe_artists(channelIds)
+    results = await execute_ytmusic_call(ytmusic.subscribe_artists, channelIds)
     return {"message": "OK", "channelIds": channelIds, "result": results}
 
 
@@ -186,7 +189,7 @@ async def unsubscribe_artists(
     if not channelIds:
         raise HTTPException(status_code=400, detail="At least one channel ID is required")
 
-    results = ytmusic.unsubscribe_artists(channelIds)
+    results = await execute_ytmusic_call(ytmusic.unsubscribe_artists, channelIds)
     return {"message": "OK", "channelIds": channelIds, "result": results}
 
 
@@ -198,6 +201,5 @@ async def edit_song_library_status(
     if not feedbackTokens:
         raise HTTPException(status_code=400, detail="At least one feedback token is required")
 
-    results = ytmusic.edit_song_library_status(feedbackTokens)
+    results = await execute_ytmusic_call(ytmusic.edit_song_library_status, feedbackTokens)
     return {"message": "OK", "feedbackTokens": feedbackTokens, "result": results}
-

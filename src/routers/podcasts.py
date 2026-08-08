@@ -1,10 +1,9 @@
 import logging
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 from ytmusicapi import YTMusic
 
+from src.utils.cache import execute_ytmusic_call
 from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_browse_errors
 
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 async def get_channel(
     channelId: str, ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    results = ytmusic.get_channel(channelId)
+    results = await execute_ytmusic_call(ytmusic.get_channel, channelId)
 
     if not results:
         raise HTTPException(status_code=404, detail="Channel not found")
@@ -30,7 +29,7 @@ async def get_channel(
 async def get_channel_episodes(
     channelId: str, params: str, ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    results = ytmusic.get_channel_episodes(channelId, params)
+    results = await execute_ytmusic_call(ytmusic.get_channel_episodes, channelId, params)
 
     if not results:
         raise HTTPException(status_code=404, detail="Channel episodes not found")
@@ -45,7 +44,7 @@ async def get_podcast(
     limit: int | None = 100,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_podcast(playlistId, limit)
+    results = await execute_ytmusic_call(ytmusic.get_podcast, playlistId, limit)
 
     if not results:
         raise HTTPException(status_code=404, detail="Podcast not found")
@@ -58,7 +57,7 @@ async def get_podcast(
 async def get_episode(
     videoId: str, ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    results = ytmusic.get_episode(videoId)
+    results = await execute_ytmusic_call(ytmusic.get_episode, videoId)
 
     if not results:
         raise HTTPException(status_code=404, detail="Episode not found")
@@ -71,10 +70,9 @@ async def get_episode(
 async def get_episodes_playlist(
     playlist_id: str = "RDPN", ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    results = ytmusic.get_episodes_playlist(playlist_id)
+    results = await execute_ytmusic_call(ytmusic.get_episodes_playlist, playlist_id)
 
     if not results:
         raise HTTPException(status_code=404, detail="Episodes playlist not found")
 
     return {"message": "OK", "query": playlist_id, "result": results}
-

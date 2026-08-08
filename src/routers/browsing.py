@@ -4,6 +4,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from ytmusicapi import YTMusic
 
+from src.utils.cache import execute_ytmusic_call
 from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_browse_errors
 
@@ -14,12 +15,13 @@ logger = logging.getLogger(__name__)
 @router.get("/home")
 @handle_browse_errors
 async def get_home(limit: int = 3, ytmusic: YTMusic = Depends(get_ytmusic)):
-    search_results = ytmusic.get_home(limit)
+    search_results = await execute_ytmusic_call(ytmusic.get_home, limit)
 
     if not search_results:
         raise HTTPException(status_code=404, detail="No home content found")
 
     return {"message": "OK", "limit": limit, "result": search_results}
+
 
 
 @router.get("/artist/{channelId}")
@@ -445,7 +447,22 @@ async def set_tasteprofile(
     taste_profile: dict | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    ytmusic.set_tasteprofile(artists, taste_profile)
+    await execute_ytmusic_call(ytmusic.set_tasteprofile, artists, taste_profile)
 
     return {"message": "OK", "query": artists}
+
+
+@router.get("/credits/{browseId}")
+@handle_browse_errors
+async def get_song_credits(
+    browseId: str, ytmusic: YTMusic = Depends(get_ytmusic)
+):
+    """Retrieves song credits (performers, writers, producers) by browse ID."""
+    results = await execute_ytmusic_call(ytmusic.get_song_credits, browseId)
+
+    if not results:
+        raise HTTPException(status_code=404, detail="Credits not found for this song")
+
+    return {"message": "OK", "browseId": browseId, "result": results}
+
 

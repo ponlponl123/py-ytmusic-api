@@ -122,7 +122,10 @@ class YTMusicClient:
             return cls._instance
 
         # Normalize and hash auth key for caching
-        auth_key_str = str(cookie_or_auth) if isinstance(cookie_or_auth, dict) else cookie_or_auth.strip()
+        if isinstance(cookie_or_auth, dict):
+            auth_key_str = str(cookie_or_auth)
+        else:
+            auth_key_str = cookie_or_auth.strip()
         auth_hash = hashlib.sha256(auth_key_str.encode("utf-8")).hexdigest()
 
         if auth_hash in cls._cookie_clients:
@@ -169,10 +172,23 @@ class YTMusicClient:
                 pass
 
         # Case 3: Standard cookie string (e.g., SAPISID=... or VISITOR_INFO1_LIVE=...)
-        headers = initialize_headers()
+        headers = dict(initialize_headers())
         headers["cookie"] = auth_str
         headers["x-goog-authuser"] = "0"
         return YTMusic(auth=headers)
+
+    @classmethod
+    def get_auth_key_from_request(cls, request: Request) -> str | None:
+        """Returns candidate cookie/auth string from Request, or None if unauthenticated."""
+        if "x-ytmusic-cookie" in request.headers:
+            return request.headers["x-ytmusic-cookie"]
+        if "cookie" in request.headers:
+            return request.headers["cookie"]
+        if "authorization" in request.headers:
+            return request.headers["authorization"]
+        if "cookie" in request.query_params:
+            return request.query_params["cookie"]
+        return None
 
     @classmethod
     def get_client_from_request(cls, request: Request) -> YTMusic:
@@ -184,21 +200,7 @@ class YTMusicClient:
         3. authorization header
         4. cookie query parameter
         """
-        cookie_candidate: str | None = None
-
-        # 1. Custom x-ytmusic-cookie header
-        if "x-ytmusic-cookie" in request.headers:
-            cookie_candidate = request.headers["x-ytmusic-cookie"]
-        # 2. Standard Cookie header
-        elif "cookie" in request.headers:
-            cookie_candidate = request.headers["cookie"]
-        # 3. Authorization header
-        elif "authorization" in request.headers:
-            cookie_candidate = request.headers["authorization"]
-        # 4. Query parameter
-        elif "cookie" in request.query_params:
-            cookie_candidate = request.query_params["cookie"]
-
+        cookie_candidate = cls.get_auth_key_from_request(request)
         return cls.get_client(cookie_candidate)
 
     @classmethod
@@ -214,3 +216,7 @@ def get_ytmusic(request: Request) -> YTMusic:
     """FastAPI dependency for injecting per-user YTMusic client."""
     return YTMusicClient.get_client_from_request(request)
 
+
+def get_request_auth_key(request: Request) -> str | None:
+    """Helper to get user auth key or None for caching purposes."""
+    return YTMusicClient.get_auth_key_from_request(request)

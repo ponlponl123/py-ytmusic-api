@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 import logging
 import traceback
 from datetime import datetime, timezone
@@ -6,6 +8,7 @@ import ytmusicapi
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.docs import (
     get_redoc_html,
     get_swagger_ui_html,
@@ -38,11 +41,20 @@ logging.basicConfig(
 # Get logger for the main application
 logger = logging.getLogger(__name__)
 
-# Log startup
-logger.info("=" * 80)
-logger.info("YT Music API Starting Up")
-logger.info("Startup Time: %s", datetime.now().isoformat())
-logger.info("=" * 80)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Lifespan context manager for startup and shutdown logging."""
+    logger.info("=" * 80)
+    logger.info("YT Music API Starting Up")
+    logger.info("Startup Time: %s", datetime.now().isoformat())
+    logger.info("=" * 80)
+    yield
+    logger.info("=" * 80)
+    logger.info("YT Music API Shutting Down")
+    logger.info("Shutdown Time: %s", datetime.now().isoformat())
+    logger.info("=" * 80)
+
 
 app = FastAPI(
     docs_url=None,
@@ -50,7 +62,11 @@ app = FastAPI(
     title="YT Music API",
     description="A comprehensive YouTube Music API wrapper with robust error handling",
     version="1.0.0",
+    lifespan=lifespan,
 )
+
+# Add GZip compression middleware for payloads > 1KB
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Add CORS middleware
 app.add_middleware(
@@ -60,6 +76,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
 
 
 # Request logging middleware
@@ -247,18 +265,22 @@ async def api_status():
         }
 
 
+oauth2_redirect_path = app.swagger_ui_oauth2_redirect_url or "/docs/oauth2-redirect"
+openapi_url_path = app.openapi_url or "/openapi.json"
+
+
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
     return get_swagger_ui_html(
-        openapi_url=app.openapi_url,
+        openapi_url=openapi_url_path,
         title=app.title + " - Swagger UI",
-        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        oauth2_redirect_url=oauth2_redirect_path,
         swagger_js_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js",
         swagger_css_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css",
     )
 
 
-@app.get(app.swagger_ui_oauth2_redirect_url, include_in_schema=False)
+@app.get(oauth2_redirect_path, include_in_schema=False)
 async def swagger_ui_redirect():
     return get_swagger_ui_oauth2_redirect_html()
 
@@ -266,19 +288,10 @@ async def swagger_ui_redirect():
 @app.get("/redoc", include_in_schema=False)
 async def redoc_html():
     return get_redoc_html(
-        openapi_url=app.openapi_url,
+        openapi_url=openapi_url_path,
         title=app.title + " - ReDoc",
         redoc_js_url="https://unpkg.com/redoc@next/bundles/redoc.standalone.js",
     )
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Log application shutdown"""
-    logger.info("=" * 80)
-    logger.info("YT Music API Shutting Down")
-    logger.info("Shutdown Time: %s", datetime.now().isoformat())
-    logger.info("=" * 80)
 
 
 if __name__ == "__main__":

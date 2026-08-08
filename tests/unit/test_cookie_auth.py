@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from src.main import app
-from src.utils.client import YTMusicClient, get_ytmusic
+from src.utils.client import YTMusicClient
 
 
 @pytest.fixture(autouse=True)
@@ -40,35 +40,36 @@ def test_get_client_with_custom_cookie(monkeypatch):
 
 def test_get_client_from_request_headers(monkeypatch):
     mock_client = MagicMock()
-    monkeypatch.setattr(YTMusicClient, "get_client", MagicMock(return_value=mock_client))
+    mock_get_client = MagicMock(return_value=mock_client)
+    monkeypatch.setattr(YTMusicClient, "get_client", mock_get_client)
 
     # Test 1: x-ytmusic-cookie header
     req_custom = MagicMock()
     req_custom.headers = {"x-ytmusic-cookie": "custom_cookie_val"}
     req_custom.query_params = {}
     YTMusicClient.get_client_from_request(req_custom)
-    YTMusicClient.get_client.assert_called_with("custom_cookie_val")
+    mock_get_client.assert_called_with("custom_cookie_val")
 
     # Test 2: standard cookie header
     req_standard = MagicMock()
     req_standard.headers = {"cookie": "standard_cookie_val"}
     req_standard.query_params = {}
     YTMusicClient.get_client_from_request(req_standard)
-    YTMusicClient.get_client.assert_called_with("standard_cookie_val")
+    mock_get_client.assert_called_with("standard_cookie_val")
 
     # Test 3: authorization header
     req_auth = MagicMock()
     req_auth.headers = {"authorization": "SAPISIDHASH 12345_hash"}
     req_auth.query_params = {}
     YTMusicClient.get_client_from_request(req_auth)
-    YTMusicClient.get_client.assert_called_with("SAPISIDHASH 12345_hash")
+    mock_get_client.assert_called_with("SAPISIDHASH 12345_hash")
 
     # Test 4: cookie query param
     req_query = MagicMock()
     req_query.headers = {}
     req_query.query_params = {"cookie": "query_cookie_val"}
     YTMusicClient.get_client_from_request(req_query)
-    YTMusicClient.get_client.assert_called_with("query_cookie_val")
+    mock_get_client.assert_called_with("query_cookie_val")
 
 
 def test_fastapi_endpoint_receives_cookie(monkeypatch):

@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from ytmusicapi import YTMusic
 
+from src.utils.cache import execute_ytmusic_call
 from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_playlist_errors
 
@@ -77,9 +78,12 @@ async def edit_playlist(
     title: str | None = None,
     description: str | None = None,
     privacyStatus: str | None = None,
+    collaboration: bool | None = None,
     moveItem: str | tuple[str, str] | None = None,
     addPlaylistId: str | None = None,
+    sortOrder: str | None = None,
     addToTop: bool | None = None,
+    voteOption: str | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
     # Validate privacy status if provided
@@ -95,26 +99,49 @@ async def edit_playlist(
             )
 
     # Validate that at least one parameter is provided for editing
-    if not any([title, description, privacyStatus, moveItem, addPlaylistId]):
+    if not any([title, description, privacyStatus, collaboration, moveItem, addPlaylistId, sortOrder, addToTop, voteOption]):
         raise HTTPException(
             status_code=400,
             detail=(
-                "At least one parameter (title, description, privacyStatus, "
-                "moveItem, addPlaylistId) must be provided"
+                "At least one parameter (title, description, privacyStatus, collaboration, "
+                "moveItem, addPlaylistId, sortOrder, addToTop, voteOption) must be provided"
             ),
         )
 
-    results = ytmusic.edit_playlist(
+    results = await execute_ytmusic_call(
+        ytmusic.edit_playlist,
         playlistId,
         title=title,
         description=description,
         privacyStatus=privacyStatus,
+        collaboration=collaboration,
         moveItem=moveItem,
         addPlaylistId=addPlaylistId,
+        sortOrder=sortOrder,
         addToTop=addToTop,
+        voteOption=voteOption,
     )
 
     return {"message": "OK", "playlistId": playlistId, "result": results}
+
+
+@router.post("/join_collaborative")
+@handle_playlist_errors
+async def join_collaborative_playlist(
+    playlistId: str,
+    joinCollaborationToken: str,
+    ytmusic: YTMusic = Depends(get_ytmusic),
+):
+    """Joins a collaborative playlist using a token."""
+    if not playlistId.strip() or not joinCollaborationToken.strip():
+        raise HTTPException(status_code=400, detail="playlistId and joinCollaborationToken are required")
+
+    results = await execute_ytmusic_call(
+        ytmusic.join_collaborative_playlist, playlistId, joinCollaborationToken
+    )
+
+    return {"message": "OK", "playlistId": playlistId, "result": results}
+
 
 
 @router.delete("/{playlistId}")

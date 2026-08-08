@@ -1,12 +1,10 @@
 import logging
-from typing import Any
-
-import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from ytmusicapi import YTMusic
 
+from src.utils.cache import execute_ytmusic_call
 from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_search_errors
 
@@ -18,8 +16,7 @@ logger = logging.getLogger(__name__)
 async def health_check(ytmusic: YTMusic = Depends(get_ytmusic)):
     """Health check endpoint to test basic YTMusic API functionality"""
     try:
-        # Try a simple search to test API connectivity
-        test_results = ytmusic.search("test", limit=1)
+        test_results = await execute_ytmusic_call(ytmusic.search, "test", limit=1)
 
         return {
             "status": "healthy",
@@ -54,7 +51,6 @@ def _enrich_search_results(results: list[dict[str, Any]]) -> list[dict[str, Any]
     Enrich search results by adding category labels based on resultType
     when category is null (common when filter is None or "all").
     """
-    # Category mapping based on resultType
     category_map = {
         "song": "Songs",
         "video": "Videos",
@@ -62,14 +58,13 @@ def _enrich_search_results(results: list[dict[str, Any]]) -> list[dict[str, Any]
         "album": "Albums",
         "playlist": "Playlists",
         "episode": "Episodes",
+        "podcast": "Podcasts",
+        "profile": "Profiles",
     }
 
     enriched_results = []
     for item in results:
-        # Create a copy to avoid modifying the original
         enriched_item = item.copy()
-
-        # If category is null and we have a resultType, infer the category
         if enriched_item.get("category") is None and "resultType" in enriched_item:
             result_type = enriched_item["resultType"]
             enriched_item["category"] = category_map.get(result_type, None)
@@ -79,27 +74,46 @@ def _enrich_search_results(results: list[dict[str, Any]]) -> list[dict[str, Any]
     return enriched_results
 
 
+SearchFilter = Literal[
+    "songs",
+    "videos",
+    "albums",
+    "artists",
+    "playlists",
+    "community_playlists",
+    "featured_playlists",
+    "profiles",
+    "podcasts",
+    "episodes",
+]
+
+
 @router.get("/")
 @handle_search_errors
 # pylint: disable=redefined-builtin, too-many-positional-arguments
 async def search(
     query: str = Query(..., description="Search query"),
-    filter: str | None = None,
+    filter: SearchFilter | None = Query(None, description="Optional search filter"),
     ignore_spelling: bool = False,
     limit: int = 20,
-    scope: str | None = None,
+    scope: Literal["uploads", "library"] | None = Query(None, description="Optional search scope"),
     enrich_categories: bool = True,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
     try:
-        search_results = ytmusic.search(
-            query=query, filter=filter, ignore_spelling=ignore_spelling, limit=limit, scope=scope
+        search_results = await execute_ytmusic_call(
+            ytmusic.search,
+            query=query,
+            filter=filter,
+            ignore_spelling=ignore_spelling,
+            limit=limit,
+            scope=scope,
         )
     except KeyError as e:
         logger.warning("Search failed with KeyError, trying simplified fallback: %s", e)
         try:
-            # Simplified search without scope parameter to avoid parsing issues
-            simplified_results = ytmusic.search(
+            simplified_results = await execute_ytmusic_call(
+                ytmusic.search,
                 query=query,
                 filter=filter,
                 limit=min(limit, 10),
@@ -132,13 +146,15 @@ async def get_suggestions(
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
     try:
-        search_results = ytmusic.get_search_suggestions(query=query, detailed_runs=detailed_runs)
+        search_results = await execute_ytmusic_call(
+            ytmusic.get_search_suggestions, query=query, detailed_runs=detailed_runs
+        )
     except KeyError as e:
         if detailed_runs:
             logger.warning("Suggestions with detailed_runs failed, trying simplified: %s", e)
             try:
-                simplified_results = ytmusic.get_search_suggestions(
-                    query=query, detailed_runs=False
+                simplified_results = await execute_ytmusic_call(
+                    ytmusic.get_search_suggestions, query=query, detailed_runs=False
                 )
                 if simplified_results:
                     return {
@@ -164,6 +180,7 @@ async def remove_suggestions(
     indices: list[int] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.remove_search_suggestions(suggestions=suggestions, indices=indices)
+    results = await execute_ytmusic_call(
+        ytmusic.remove_search_suggestions, suggestions=suggestions, indices=indices
+    )
     return {"message": "OK", "query": suggestions, "result": results}
-

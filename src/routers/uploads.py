@@ -1,12 +1,10 @@
 import logging
 from typing import Literal
 
-import logging
-from typing import Literal
-
 from fastapi import APIRouter, Depends, HTTPException
 from ytmusicapi import YTMusic
 
+from src.utils.cache import execute_ytmusic_call
 from src.utils.client import get_ytmusic
 from src.utils.error_handlers import handle_upload_errors
 
@@ -21,7 +19,7 @@ async def get_library_upload_songs(
     order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_library_upload_songs(limit, order=order)
+    results = await execute_ytmusic_call(ytmusic.get_library_upload_songs, limit, order=order)
 
     return {"message": "OK", "result": results}
 
@@ -33,7 +31,7 @@ async def get_library_upload_artists(
     order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_library_upload_artists(limit, order=order)
+    results = await execute_ytmusic_call(ytmusic.get_library_upload_artists, limit, order=order)
 
     return {"message": "OK", "result": results}
 
@@ -45,7 +43,7 @@ async def get_library_upload_albums(
     order: Literal["a_to_z", "z_to_a", "recently_added"] | None = None,
     ytmusic: YTMusic = Depends(get_ytmusic),
 ):
-    results = ytmusic.get_library_upload_albums(limit, order=order)
+    results = await execute_ytmusic_call(ytmusic.get_library_upload_albums, limit, order=order)
 
     return {"message": "OK", "result": results}
 
@@ -55,7 +53,7 @@ async def get_library_upload_albums(
 async def get_library_upload_artist(
     browseId: str, limit: int = 25, ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    results = ytmusic.get_library_upload_artist(browseId, limit)
+    results = await execute_ytmusic_call(ytmusic.get_library_upload_artist, browseId, limit)
 
     if not results:
         raise HTTPException(status_code=404, detail=f"Upload artist with ID {browseId} not found")
@@ -68,7 +66,7 @@ async def get_library_upload_artist(
 async def get_library_upload_album(
     browseId: str, ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    results = ytmusic.get_library_upload_album(browseId)
+    results = await execute_ytmusic_call(ytmusic.get_library_upload_album, browseId)
 
     if not results:
         raise HTTPException(status_code=404, detail=f"Upload album with ID {browseId} not found")
@@ -93,7 +91,7 @@ async def upload_song(
             detail=f"Invalid file extension. Supported formats: {', '.join(valid_extensions)}",
         )
 
-    results = ytmusic.upload_song(filepath)
+    results = await execute_ytmusic_call(ytmusic.upload_song, filepath)
 
     return {"message": "OK", "filepath": filepath, "result": results}
 
@@ -106,7 +104,6 @@ async def delete_upload_entity(
     if not entityId.strip():
         raise HTTPException(status_code=400, detail="Entity ID cannot be empty")
 
-    results = ytmusic.delete_upload_entity(entityId)
+    results = await execute_ytmusic_call(ytmusic.delete_upload_entity, entityId)
 
     return {"message": "OK", "entityId": entityId, "result": results}
-

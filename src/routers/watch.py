@@ -1,11 +1,10 @@
 import logging
 
-import logging
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from ytmusicapi import YTMusic
 
-from src.utils.client import get_ytmusic
+from src.utils.cache import execute_ytmusic_call
+from src.utils.client import get_request_auth_key, get_ytmusic
 from src.utils.error_handlers import handle_browse_errors
 
 router = APIRouter()
@@ -14,8 +13,24 @@ logger = logging.getLogger(__name__)
 
 @router.get("/mood_categories")
 @handle_browse_errors
-def get_mood_categories(ytmusic: YTMusic = Depends(get_ytmusic)):
-    results = ytmusic.get_mood_categories()
+async def get_mood_categories(
+    request: Request, ytmusic: YTMusic = Depends(get_ytmusic)
+):
+    auth_key = get_request_auth_key(request)
+    cache_key = "watch:mood_categories" if not auth_key else None
+    results = await execute_ytmusic_call(
+        ytmusic.get_mood_categories, cache_key=cache_key
+    )
+    return {"message": "OK", "result": results}
+
+
+@router.get("/signature_timestamp")
+@handle_browse_errors
+async def get_signature_timestamp(
+    url: str | None = None, ytmusic: YTMusic = Depends(get_ytmusic)
+):
+    """Retrieves YouTube player signature timestamp for audio token decryption."""
+    results = await execute_ytmusic_call(ytmusic.get_signatureTimestamp, url=url)
     return {"message": "OK", "result": results}
 
 
@@ -35,12 +50,16 @@ async def get_watch_playlist(
     if limit > 100:
         raise HTTPException(status_code=400, detail="Limit cannot exceed 100")
 
-    results = ytmusic.get_watch_playlist(
-        videoId=videoId, playlistId=playlistId, limit=limit, radio=radio, shuffle=shuffle
+    results = await execute_ytmusic_call(
+        ytmusic.get_watch_playlist,
+        videoId=videoId,
+        playlistId=playlistId,
+        limit=limit,
+        radio=radio,
+        shuffle=shuffle,
     )
 
     if not results:
         raise HTTPException(status_code=404, detail="Video not found")
 
     return {"message": "OK", "videoId": videoId, "playlistId": playlistId, "result": results}
-

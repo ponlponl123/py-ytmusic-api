@@ -1,23 +1,43 @@
 import logging
 
-import logging
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from ytmusicapi import YTMusic
 
-from src.utils.client import get_ytmusic
+from src.utils.cache import execute_ytmusic_call
+from src.utils.client import get_request_auth_key, get_ytmusic
 from src.utils.error_handlers import handle_browse_errors
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("/")
+@router.get("/explore")
+@handle_browse_errors
+async def get_explore(
+    request: Request, ytmusic: YTMusic = Depends(get_ytmusic)
+):
+    """Retrieves main YouTube Music explore page content."""
+    auth_key = get_request_auth_key(request)
+    cache_key = "explore:main" if not auth_key else None
+    results = await execute_ytmusic_call(ytmusic.get_explore, cache_key=cache_key)
+
+    if not results:
+        raise HTTPException(status_code=404, detail="Explore content not found")
+
+    return {"message": "OK", "result": results}
+
+
 @router.get("/mood_playlists/{query}")
 @handle_browse_errors
 async def get_mood_playlists(
-    query: str, ytmusic: YTMusic = Depends(get_ytmusic)
+    query: str, request: Request, ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    results = ytmusic.get_mood_playlists(query)
+    auth_key = get_request_auth_key(request)
+    cache_key = f"explore:mood:{query}" if not auth_key else None
+    results = await execute_ytmusic_call(
+        ytmusic.get_mood_playlists, query, cache_key=cache_key
+    )
 
     if not results:
         raise HTTPException(status_code=404, detail="No mood playlists found for this query")
@@ -28,12 +48,15 @@ async def get_mood_playlists(
 @router.get("/charts/{country}")
 @handle_browse_errors
 async def get_charts(
-    country: str = "ZZ", ytmusic: YTMusic = Depends(get_ytmusic)
+    country: str = "ZZ", request: Request = Depends(lambda r: r), ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    results = ytmusic.get_charts(country)
+    auth_key = get_request_auth_key(request) if request else None
+    cache_key = f"explore:charts:{country}" if not auth_key else None
+    results = await execute_ytmusic_call(
+        ytmusic.get_charts, country, cache_key=cache_key
+    )
 
     if not results:
         raise HTTPException(status_code=404, detail=f"No charts found for country: {country}")
 
     return {"message": "OK", "query": country, "result": results}
-

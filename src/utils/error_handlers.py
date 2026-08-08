@@ -112,7 +112,9 @@ class YTMusicErrorHandler:
         )
 
     @staticmethod
-    def _handle_generic_exception(e: Exception, operation_name: str, identifier: Optional[str] = None):
+    def _handle_generic_exception(
+        e: Exception, operation_name: str, identifier: Optional[str] = None
+    ):
         error_traceback = "".join(traceback.format_exception(type(e), e, e.__traceback__))
         ident_str = f" for {identifier}" if identifier else ""
         logger.error(
