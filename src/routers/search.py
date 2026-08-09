@@ -46,10 +46,14 @@ async def health_check(ytmusic: YTMusic = Depends(get_ytmusic)):
         }
 
 
+import re
+
+DUMMY_KEYWORDS = {"song", "video", "album", "playlist", "podcast", "episode", "artist", "single", "music", "result", "track"}
+
 def _enrich_search_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    Enrich search results by adding category labels based on resultType
-    when category is null (common when filter is None or "all").
+    Enrich search results by adding category labels based on resultType,
+    cleaning dummy artist names, and extracting missing duration timestamps.
     """
     category_map = {
         "song": "Songs",
@@ -68,6 +72,58 @@ def _enrich_search_results(results: list[dict[str, Any]]) -> list[dict[str, Any]
         if enriched_item.get("category") is None and "resultType" in enriched_item:
             result_type = enriched_item["resultType"]
             enriched_item["category"] = category_map.get(result_type, None)
+
+        # 1. Clean & enrich artists array
+        artists = enriched_item.get("artists")
+        valid_artists = []
+        if isinstance(artists, list):
+            for a in artists:
+                name = a.get("name") if isinstance(a, dict) else (a if isinstance(a, str) else None)
+                if name:
+                    clean = re.sub(r"\s*-\s*Topic\s*$", "", name, flags=re.IGNORECASE).strip()
+                    if clean.lower() not in DUMMY_KEYWORDS and not re.match(r"^\d{1,2}:\d{2}(?::\d{2})?$", clean):
+                        valid_artists.append({"name": clean, "id": a.get("id") if isinstance(a, dict) else None})
+
+        if not valid_artists:
+            # Try author / channel / uploader / title
+            author = enriched_item.get("author") or enriched_item.get("channel") or enriched_item.get("uploader")
+            if isinstance(author, str):
+                clean_auth = re.sub(r"\s*-\s*Topic\s*$", "", author, flags=re.IGNORECASE).strip()
+                if clean_auth and clean_auth.lower() not in DUMMY_KEYWORDS:
+                    valid_artists.append({"name": clean_auth, "id": enriched_item.get("artistId")})
+
+        if not valid_artists and enriched_item.get("title"):
+            title = str(enriched_item["title"])
+            feat_match = re.search(r"(?:feat\.|ft\.|featuring)\s*@?([^\)\],|]+)", title, re.IGNORECASE)
+            if feat_match:
+                for part in re.split(r"&|,", feat_match.group(1)):
+                    clean_part = part.strip()
+                    if clean_part and clean_part.lower() not in DUMMY_KEYWORDS:
+                        valid_artists.append({"name": clean_part, "id": None})
+
+            dash_match = re.search(r"^([^-]+)\s*-\s*", title)
+            if dash_match and not valid_artists:
+                clean_dash = dash_match.group(1).strip()
+                if len(clean_dash) > 1 and not clean_dash.isdigit() and clean_dash.lower() not in DUMMY_KEYWORDS:
+                    valid_artists.append({"name": clean_dash, "id": None})
+
+        if valid_artists:
+            enriched_item["artists"] = valid_artists
+
+        # 2. Extract missing duration
+        if not enriched_item.get("duration") and not enriched_item.get("duration_seconds"):
+            sources = [
+                enriched_item.get("lengthText"),
+                enriched_item.get("length"),
+                enriched_item.get("subtitle"),
+                enriched_item.get("byline"),
+            ]
+            for src in sources:
+                if isinstance(src, str):
+                    ts_match = re.search(r"\b\d{1,2}:\d{2}(?::\d{2})?\b", src)
+                    if ts_match:
+                        enriched_item["duration"] = ts_match.group(0)
+                        break
 
         enriched_results.append(enriched_item)
 

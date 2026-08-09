@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from ytmusicapi import YTMusic
 
-from src.utils.cache import execute_ytmusic_call
+from src.utils.cache import build_cache_key, execute_ytmusic_call
 from src.utils.client import get_request_auth_key, get_ytmusic
 from src.utils.error_handlers import handle_browse_errors
 
@@ -17,7 +17,7 @@ async def get_mood_categories(
     request: Request, ytmusic: YTMusic = Depends(get_ytmusic)
 ):
     auth_key = get_request_auth_key(request)
-    cache_key = "watch:mood_categories" if not auth_key else None
+    cache_key = build_cache_key("watch:mood_categories", auth_key)
     results = await execute_ytmusic_call(
         ytmusic.get_mood_categories, cache_key=cache_key
     )
@@ -38,6 +38,7 @@ async def get_signature_timestamp(
 @handle_browse_errors
 async def get_watch_playlist(
     videoId: str,
+    request: Request,
     playlistId: str | None = None,
     limit: int = 25,
     radio: bool = False,
@@ -50,6 +51,9 @@ async def get_watch_playlist(
     if limit > 100:
         raise HTTPException(status_code=400, detail="Limit cannot exceed 100")
 
+    auth_key = get_request_auth_key(request)
+    cache_key = build_cache_key("watch:playlist", auth_key, f"{videoId}:{playlistId}:{limit}:{radio}:{shuffle}")
+
     results = await execute_ytmusic_call(
         ytmusic.get_watch_playlist,
         videoId=videoId,
@@ -57,6 +61,7 @@ async def get_watch_playlist(
         limit=limit,
         radio=radio,
         shuffle=shuffle,
+        cache_key=cache_key,
     )
 
     if not results:
