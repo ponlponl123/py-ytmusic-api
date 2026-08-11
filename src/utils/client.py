@@ -99,83 +99,189 @@ ytmusicapi.mixins.playlists.parse_audio_playlist = safe_parse_audio_playlist
 logger.info("Successfully applied monkeypatch to ytmusicapi.parse_audio_playlist")
 
 
+SUPPORTED_YTMUSIC_LANGS = {
+    "tr", "nl", "en", "pt", "cs", "ja", "ur", "ar",
+    "zh_CN", "fr", "ru", "zh_TW", "ko", "hi", "de", "es", "it"
+}
+
+
+def normalize_yt_language(lang_str: str | None) -> tuple[str, str | None]:
+    """
+    Parses incoming Accept-Language / lang string (e.g. 'th-TH,th;q=0.9,en-US;q=0.8' or 'ja-JP').
+    Returns a tuple of (ytmusicapi_supported_lang, raw_accept_language_header).
+    """
+    if not lang_str:
+        return "en", None
+
+    raw_accept_lang = lang_str.strip()
+    first_part = raw_accept_lang.split(",")[0].split(";")[0].strip()
+    tag = first_part.replace("-", "_")
+
+    if tag.lower() in {"zh_cn", "zh_hans"}:
+        matched_lang = "zh_CN"
+    elif tag.lower() in {"zh_tw", "zh_hk", "zh_hant"}:
+        matched_lang = "zh_TW"
+    else:
+        primary = tag.split("_")[0].lower()
+        if primary in SUPPORTED_YTMUSIC_LANGS:
+            matched_lang = primary
+        else:
+            matched_lang = "en"
+
+    return matched_lang, raw_accept_lang
+
+
 class YTMusicClient:
     _instance = None
     _cookie_clients: dict[str, YTMusic] = {}
     _max_cache_size: int = 200
 
     @classmethod
-    def get_client(cls, cookie_or_auth: str | dict | None = None) -> YTMusic:
+    def get_client(
+        cls,
+        cookie_or_auth: str | dict | None = None,
+        language: str | None = None,
+        user_agent: str | None = None,
+        user_ip: str | None = None,
+        user_country: str | None = None,
+        user_timezone: str | None = None,
+        sec_ch_ua: str | None = None,
+        sec_ch_ua_mobile: str | None = None,
+        sec_ch_ua_platform: str | None = None,
+    ) -> YTMusic:
         """
-        Gets a YTMusic client instance. If a cookie or auth dictionary/string is provided,
-        initializes or retrieves a cached YTMusic instance for that specific user.
-        Otherwise returns the default shared unauthenticated client.
+        Gets a YTMusic client instance with dynamic user metadata support.
+        Configures user auth, user-agent, language, country, timezone, client hints,
+        and IP forwarding headers on the client session.
         """
-        if not cookie_or_auth:
-            if cls._instance is None:
-                logger.info("Initializing global YTMusic client instance")
-                try:
-                    cls._instance = YTMusic()
-                except Exception as e:
-                    logger.error("Failed to initialize global YTMusic client: %s", e)
-                    cls._instance = YTMusic()
-            return cls._instance
+        yt_lang, accept_lang_header = normalize_yt_language(language)
 
-        # Normalize and hash auth key for caching
         if isinstance(cookie_or_auth, dict):
             auth_key_str = str(cookie_or_auth)
-        else:
+        elif cookie_or_auth:
             auth_key_str = cookie_or_auth.strip()
-        auth_hash = hashlib.sha256(auth_key_str.encode("utf-8")).hexdigest()
+        else:
+            auth_key_str = "anonymous"
 
-        if auth_hash in cls._cookie_clients:
-            return cls._cookie_clients[auth_hash]
+        auth_hash = hashlib.sha256(auth_key_str.encode("utf-8")).hexdigest()[:16]
+        ua_hash = hashlib.sha256((user_agent or "default").encode("utf-8")).hexdigest()[:8]
+        country_hash = (user_country or "default").lower()
+        cache_key = f"{auth_hash}:{yt_lang}:{country_hash}:{ua_hash}"
 
-        logger.info("Initializing user-specific YTMusic client (hash: %s...)", auth_hash[:8])
+        if cache_key in cls._cookie_clients:
+            client = cls._cookie_clients[cache_key]
+            if user_ip:
+                client._session.headers["X-Forwarded-For"] = user_ip
+                client._session.headers["X-User-IP"] = user_ip
+            return client
+
+        logger.info(
+            "Initializing metadata-scoped YTMusic client (key: %s, lang: %s, country: %s, ip: %s)",
+            cache_key,
+            yt_lang,
+            user_country or "none",
+            user_ip or "none",
+        )
         try:
-            client_instance = cls._build_user_client(cookie_or_auth)
-            # Evict oldest entry if cache exceeds maximum size
+            client_instance = cls._build_user_client(
+                cookie_or_auth=cookie_or_auth if auth_key_str != "anonymous" else None,
+                language=yt_lang,
+                accept_language=accept_lang_header,
+                user_agent=user_agent,
+                user_ip=user_ip,
+                user_country=user_country,
+                user_timezone=user_timezone,
+                sec_ch_ua=sec_ch_ua,
+                sec_ch_ua_mobile=sec_ch_ua_mobile,
+                sec_ch_ua_platform=sec_ch_ua_platform,
+            )
             if len(cls._cookie_clients) >= cls._max_cache_size:
                 oldest_key = next(iter(cls._cookie_clients))
                 del cls._cookie_clients[oldest_key]
-            cls._cookie_clients[auth_hash] = client_instance
+            cls._cookie_clients[cache_key] = client_instance
             return client_instance
         except Exception as e:
             logger.warning(
                 "Failed to initialize custom YTMusic client (%s). Falling back to default client.",
                 e,
             )
-            return cls.get_client(None)
+            if cls._instance is None:
+                cls._instance = YTMusic(language=yt_lang)
+            return cls._instance
 
     @classmethod
-    def _build_user_client(cls, cookie_or_auth: str | dict) -> YTMusic:
-        """Helper to build a YTMusic client from a cookie string or auth dict/JSON."""
+    def _build_user_client(
+        cls,
+        cookie_or_auth: str | dict | None = None,
+        language: str = "en",
+        accept_language: str | None = None,
+        user_agent: str | None = None,
+        user_ip: str | None = None,
+        user_country: str | None = None,
+        user_timezone: str | None = None,
+        sec_ch_ua: str | None = None,
+        sec_ch_ua_mobile: str | None = None,
+        sec_ch_ua_platform: str | None = None,
+    ) -> YTMusic:
+        """Helper to build a YTMusic client with metadata session headers."""
+        client: YTMusic | None = None
+
         if isinstance(cookie_or_auth, dict):
-            return YTMusic(auth=cookie_or_auth)
+            client = YTMusic(auth=cookie_or_auth, language=language)
+        elif cookie_or_auth:
+            auth_str = cookie_or_auth.strip()
+            if auth_str.startswith("{"):
+                try:
+                    auth_dict = json.loads(auth_str)
+                    client = YTMusic(auth=auth_dict, language=language)
+                except Exception:
+                    client = None
 
-        auth_str = cookie_or_auth.strip()
+            if client is None and "\n" in auth_str and ":" in auth_str:
+                try:
+                    parsed_json_str = setup(headers_raw=auth_str)
+                    client = YTMusic(auth=parsed_json_str, language=language)
+                except Exception:
+                    client = None
 
-        # Case 1: JSON format string
-        if auth_str.startswith("{"):
-            try:
-                auth_dict = json.loads(auth_str)
-                return YTMusic(auth=auth_dict)
-            except Exception:
-                pass
+            if client is None:
+                headers = dict(initialize_headers())
+                headers["cookie"] = auth_str
+                headers["x-goog-authuser"] = "0"
+                client = YTMusic(auth=headers, language=language)
+        else:
+            client = YTMusic(language=language)
 
-        # Case 2: Raw browser header string (contains colons and newlines)
-        if "\n" in auth_str and ":" in auth_str:
-            try:
-                parsed_json_str = setup(headers_raw=auth_str)
-                return YTMusic(auth=parsed_json_str)
-            except Exception:
-                pass
+        if user_agent:
+            client._session.headers["User-Agent"] = user_agent
+            client.headers["user-agent"] = user_agent
 
-        # Case 3: Standard cookie string (e.g., SAPISID=... or VISITOR_INFO1_LIVE=...)
-        headers = dict(initialize_headers())
-        headers["cookie"] = auth_str
-        headers["x-goog-authuser"] = "0"
-        return YTMusic(auth=headers)
+        if accept_language:
+            client._session.headers["Accept-Language"] = accept_language
+
+        if user_ip:
+            client._session.headers["X-Forwarded-For"] = user_ip
+            client._session.headers["X-User-IP"] = user_ip
+            client._session.headers["X-Originating-IP"] = user_ip
+
+        if user_country:
+            client._session.headers["X-User-Country"] = user_country.upper()
+            if hasattr(client, "context") and isinstance(client.context, dict):
+                client.context.setdefault("context", {}).setdefault("client", {})["gl"] = user_country.upper()
+
+        if user_timezone:
+            client._session.headers["X-Time-Zone"] = user_timezone
+            if hasattr(client, "context") and isinstance(client.context, dict):
+                client.context.setdefault("context", {}).setdefault("client", {})["timeZone"] = user_timezone
+
+        if sec_ch_ua:
+            client._session.headers["Sec-CH-UA"] = sec_ch_ua
+        if sec_ch_ua_mobile:
+            client._session.headers["Sec-CH-UA-Mobile"] = sec_ch_ua_mobile
+        if sec_ch_ua_platform:
+            client._session.headers["Sec-CH-UA-Platform"] = sec_ch_ua_platform
+
+        return client
 
     @classmethod
     def get_auth_key_from_request(cls, request: Request) -> str | None:
@@ -191,17 +297,84 @@ class YTMusicClient:
         return None
 
     @classmethod
+    def get_request_user_lang(cls, request: Request) -> str | None:
+        """Extracts candidate language string from Request headers or query parameters."""
+        if "x-user-lang" in request.headers:
+            return request.headers["x-user-lang"]
+        if "accept-language" in request.headers:
+            return request.headers["accept-language"]
+        if "hl" in request.query_params:
+            return request.query_params["hl"]
+        return None
+
+    @classmethod
+    def get_request_user_country(cls, request: Request) -> str | None:
+        """Extracts country/region code from Request headers or query parameters."""
+        if "x-user-country" in request.headers:
+            return request.headers["x-user-country"]
+        if "gl" in request.query_params:
+            return request.query_params["gl"]
+        if "cf-ipcountry" in request.headers:
+            return request.headers["cf-ipcountry"]
+        return None
+
+    @classmethod
+    def get_request_user_timezone(cls, request: Request) -> str | None:
+        """Extracts timezone identifier or offset from Request headers."""
+        if "x-user-timezone" in request.headers:
+            return request.headers["x-user-timezone"]
+        if "x-time-zone" in request.headers:
+            return request.headers["x-time-zone"]
+        return None
+
+    @classmethod
+    def get_request_user_agent(cls, request: Request) -> str | None:
+        """Extracts candidate user agent string from Request headers."""
+        if "x-user-agent" in request.headers:
+            return request.headers["x-user-agent"]
+        if "user-agent" in request.headers:
+            return request.headers["user-agent"]
+        return None
+
+    @classmethod
+    def get_request_user_ip(cls, request: Request) -> str | None:
+        """Extracts candidate client IP from Request headers or connection state."""
+        if "x-forwarded-for" in request.headers:
+            return request.headers["x-forwarded-for"].split(",")[0].strip()
+        if "x-real-ip" in request.headers:
+            return request.headers["x-real-ip"].strip()
+        if request.client and request.client.host:
+            return request.client.host
+        return None
+
+    @classmethod
     def get_client_from_request(cls, request: Request) -> YTMusic:
         """
-        Extracts user cookie/auth from incoming FastAPI Request and returns the appropriate client.
-        Checks:
-        1. x-ytmusic-cookie header
-        2. cookie header / request cookies
-        3. authorization header
-        4. cookie query parameter
+        Extracts user cookie/auth, language, country, timezone, user-agent, client hints, and IP
+        from incoming FastAPI Request and returns the appropriate client.
         """
         cookie_candidate = cls.get_auth_key_from_request(request)
-        return cls.get_client(cookie_candidate)
+        user_lang = cls.get_request_user_lang(request)
+        user_country = cls.get_request_user_country(request)
+        user_timezone = cls.get_request_user_timezone(request)
+        user_agent = cls.get_request_user_agent(request)
+        user_ip = cls.get_request_user_ip(request)
+
+        sec_ch_ua = request.headers.get("sec-ch-ua")
+        sec_ch_ua_mobile = request.headers.get("sec-ch-ua-mobile")
+        sec_ch_ua_platform = request.headers.get("sec-ch-ua-platform")
+
+        return cls.get_client(
+            cookie_or_auth=cookie_candidate,
+            language=user_lang,
+            user_agent=user_agent,
+            user_ip=user_ip,
+            user_country=user_country,
+            user_timezone=user_timezone,
+            sec_ch_ua=sec_ch_ua,
+            sec_ch_ua_mobile=sec_ch_ua_mobile,
+            sec_ch_ua_platform=sec_ch_ua_platform,
+        )
 
     @classmethod
     def reset_client(cls) -> None:
@@ -220,3 +393,9 @@ def get_ytmusic(request: Request) -> YTMusic:
 def get_request_auth_key(request: Request) -> str | None:
     """Helper to get user auth key or None for caching purposes."""
     return YTMusicClient.get_auth_key_from_request(request)
+
+
+def get_request_user_lang(request: Request) -> str | None:
+    """Helper to get user language or None for caching purposes."""
+    return YTMusicClient.get_request_user_lang(request)
+

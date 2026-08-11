@@ -14,19 +14,30 @@ from starlette.concurrency import run_in_threadpool
 _ttl_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)
 
 
-def build_cache_key(prefix: str, auth_key: str | None = None, suffix: str | None = None) -> str:
+def build_cache_key(
+    prefix: str,
+    auth_key: str | None = None,
+    suffix: str | None = None,
+    lang: str | None = None,
+) -> str:
     """
     Constructs a deterministic cache key scoped to a user session (or 'anonymous' if None).
     Hashes long auth/cookie strings using SHA-256 for clean, uniform cache key generation.
+    Incorporates optional lang/locale tag to prevent localized response collisions.
     """
     if auth_key:
         user_identifier = hashlib.sha256(auth_key.encode("utf-8")).hexdigest()[:16]
     else:
         user_identifier = "anonymous"
 
+    parts = [user_identifier]
+    if lang:
+        parts.append(lang.lower().strip())
+    parts.append(prefix)
     if suffix:
-        return f"{user_identifier}:{prefix}:{suffix}"
-    return f"{user_identifier}:{prefix}"
+        parts.append(suffix)
+
+    return ":".join(parts)
 
 
 async def execute_ytmusic_call(
