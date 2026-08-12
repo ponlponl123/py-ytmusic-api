@@ -50,10 +50,10 @@ async def get_mood_playlists(
 @router.get("/charts/{country}")
 @handle_browse_errors
 async def get_charts(
-    country: str = "ZZ", request: Request = Depends(lambda r: r), ytmusic: YTMusic = Depends(get_ytmusic)
+    request: Request, country: str = "ZZ", ytmusic: YTMusic = Depends(get_ytmusic)
 ):
-    auth_key = get_request_auth_key(request) if request else None
-    lang = get_request_user_lang(request) if request else None
+    auth_key = get_request_auth_key(request)
+    lang = get_request_user_lang(request)
     cache_key = build_cache_key("explore:charts", auth_key, country, lang=lang)
     results = await execute_ytmusic_call(
         ytmusic.get_charts, country, cache_key=cache_key

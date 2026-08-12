@@ -63,3 +63,15 @@ def test_signature_timestamp_route(monkeypatch):
     res = client.get("/watch/signature_timestamp")
     assert res.status_code == 200
     assert res.json()["result"] == 19800
+
+
+def test_explore_charts_route(monkeypatch):
+    mock_ytmusic = MagicMock()
+    mock_ytmusic.get_charts.return_value = {"countries": ["US", "JP"]}
+    monkeypatch.setattr(YTMusicClient, "get_client", MagicMock(return_value=mock_ytmusic))
+
+    client = TestClient(app)
+    res = client.get("/explore/charts/US")
+    assert res.status_code == 200
+    assert res.json()["result"]["countries"] == ["US", "JP"]
+
